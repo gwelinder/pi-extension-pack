@@ -1,0 +1,28 @@
+{
+  "name": "pi-extension-pack",
+  "version": "0.1.0",
+  "description": "A curated pack of Pi extensions for safer tool use, persistent memory, session continuity, and autonomous Magic Docs maintenance.",
+  "license": "UNLICENSED",
+  "keywords": [
+    "pi-package",
+    "pi",
+    "pi-extension",
+    "magic-docs",
+    "memory",
+    "session-notebook"
+  ],
+  "peerDependencies": {
+    "@mariozechner/pi-coding-agent": "*"
+  },
+  "files": [
+    "extensions",
+    "extras",
+    "README.md",
+    ".gitignore"
+  ],
+  "pi": {
+    "extensions": [
+      "./extensions"
+    ]
+  }
+}
