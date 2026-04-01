@@ -1,8 +1,8 @@
 {
   "name": "pi-extension-pack",
   "version": "0.1.0",
-  "description": "A curated pack of Pi extensions for safer tool use, persistent memory, session continuity, and autonomous Magic Docs maintenance.",
-  "license": "UNLICENSED",
+  "description": "A curated Pi package for safer tool use, persistent markdown memory, session notebooks, and autonomous Magic Docs maintenance.",
+  "license": "MIT",
   "keywords": [
     "pi-package",
     "pi",
@@ -14,11 +14,19 @@
   "peerDependencies": {
     "@mariozechner/pi-coding-agent": "*"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gwelinder/pi-extension-pack.git"
+  },
+  "homepage": "https://github.com/gwelinder/pi-extension-pack",
+  "bugs": {
+    "url": "https://github.com/gwelinder/pi-extension-pack/issues"
+  },
   "files": [
     "extensions",
     "extras",
     "README.md",
-    ".gitignore"
+    "LICENSE"
   ],
   "pi": {
     "extensions": [

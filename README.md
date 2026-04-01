@@ -1,13 +1,26 @@
 # pi-extension-pack
 
-A curated pack of Pi extensions for:
+A curated Pi package that bundles the most generally useful extensions built during this Pi upgrade pass:
 
-- safer tool execution
-- persistent markdown memory
-- per-session notebook continuity
-- autonomous Magic Docs maintenance
+- **`bash-fixer`** — conservative bash mistake repair before execution
+- **`tool-fixer`** — better `read` / `edit` recovery and diagnostics
+- **`pi-memory-system`** — Claude-style persistent markdown memory
+- **`pi-session-notebook`** — structured per-session continuity notebook
+- **`pi-magic-docs`** — living architecture docs with autonomous maintenance
 
-It is set up as a **Pi package** that can be installed from a local path or GitHub.
+The default manifest enables the production-ready extensions under `extensions/`.
+More experimental or more locally-coupled pieces live in `extras/`.
+
+## Why this package exists
+
+These extensions were built to make Pi more reliable and more stateful without depending on opaque graph memory or prompt-only nudges.
+
+The package focuses on four things:
+
+1. **fix common model/tooling mistakes at the runtime layer**
+2. **store durable context in readable markdown files**
+3. **preserve session continuity across long runs and compaction**
+4. **keep architecture docs alive with low-friction maintenance**
 
 ## Included by default
 
@@ -33,10 +46,11 @@ Adds Claude-style durable markdown memory under `~/.pi/agent/memory/`:
 - scoped storage: user, project, private
 - `MEMORY.md` indexes
 - selective memory recall into the system prompt
-- commands:
-  - `/remember`
-  - `/forget`
-  - `/memory-status`
+
+Commands:
+- `/remember`
+- `/forget`
+- `/memory-status`
 
 ### `pi-session-notebook`
 Creates a per-session notebook under `~/.pi/agent/session-notebooks/` and injects it into the prompt:
@@ -54,7 +68,7 @@ Command:
 - `/notebook-status`
 
 ### `pi-magic-docs`
-Tracks markdown files whose first line is `# MAGIC DOC: ...` and treats them as living architecture/overview docs:
+Tracks markdown files whose first line is `# MAGIC DOC: ...` and treats them as living architecture / overview docs:
 - tracks docs on read, edit, and write
 - persists tracked docs in session state
 - manual update command
@@ -69,12 +83,13 @@ Commands:
 ## Included in `extras/`, but not enabled by default
 
 ### `skill-observer`
-Kept in `extras/skill-observer/` because it is currently tied to a more local / legacy setup:
+Kept in `extras/skill-observer/` because it is still somewhat transitional:
 - analytics-first now, but still contains legacy Cognee integration
-- shell/python helper scripts are better treated as a separate package or cleaned up before publishing widely
+- bundles shell/python helper scripts
+- likely deserves its own package after further cleanup
 
 ### `claude-inspired-coach`
-A lightweight prompt coach, kept as reference only. It is not enabled by default because the more concrete runtime/tooling extensions are the real value here.
+A lightweight prompt coach kept as reference only. It is not enabled by default because the concrete runtime/tooling extensions are the main value here.
 
 ## Install
 
@@ -87,16 +102,16 @@ pi install /absolute/path/to/pi-extension-pack
 ### From GitHub
 
 ```bash
-pi install git:github.com/<your-org-or-user>/pi-extension-pack
+pi install git:github.com/gwelinder/pi-extension-pack
 ```
 
 Or directly via URL:
 
 ```bash
-pi install https://github.com/<your-org-or-user>/pi-extension-pack
+pi install https://github.com/gwelinder/pi-extension-pack
 ```
 
-## Project-local install
+### Project-local install
 
 ```bash
 pi install -l /absolute/path/to/pi-extension-pack
@@ -119,16 +134,16 @@ pi-extension-pack/
     claude-inspired-coach/
   package.json
   README.md
+  LICENSE
 ```
 
 ## Notes
 
-- The package is currently marked `UNLICENSED`. Choose a license before publishing publicly if you want reuse rights to be explicit.
-- The default package manifest only loads `./extensions`. `extras/` is included for reference and future extraction, but is not auto-loaded by Pi.
+- The default package manifest only loads `./extensions`.
+- `extras/` is included for reference and future extraction, but is not auto-loaded by Pi.
 - The extensions are designed for Pi's TypeScript extension loader, so no build step is required.
+- Licensed under MIT.
 
-## Suggested next step before pushing
+## Repository
 
-- review package name / repo name
-- choose a license
-- optionally split `skill-observer` into its own repo after removing local-path assumptions and legacy Cognee coupling
+- GitHub: https://github.com/gwelinder/pi-extension-pack
