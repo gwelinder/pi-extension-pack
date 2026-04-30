@@ -16,14 +16,25 @@ The runtime is based on the stronger Codex-authored app-server harness: worker-p
 
 For visually important UI work, prefer this order:
 
-1. Generate 1–8 visual mockup/reference images from the brief or current site.
-2. Review/select the strongest direction.
-3. Run `describe` on the chosen image to produce `spec.md` + implementation constraints.
-4. Implement the actual code with the normal frontend stack.
-5. Inspect generated references inside Pi with `/codex-gallery <out-dir-or-summary.json>` when the `codex-ui-gallery` extension is loaded.
-6. Screenshot the result and run `iterate` for a residual delta spec if needed.
+1. For ambitious web comps, first load the optional Taste companion skill `imagegen-frontend-web` and use its rules to shape the `--context` / `--prompt` before invoking Codex imagegen.
+2. Generate 1–8 visual mockup/reference images from the brief or current site.
+3. Review/select the strongest direction.
+4. Run `describe` on the chosen image to produce `spec.md` + implementation constraints.
+5. Implement the actual code with the normal frontend stack.
+6. Inspect generated references inside Pi with `/codex-gallery <out-dir-or-summary.json>` when the `codex-ui-gallery` extension is loaded.
+7. Screenshot the result and run `iterate` for a residual delta spec if needed.
 
 The image model does the art direction; Pi does the engineering.
+
+## Companion Taste skills
+
+`codex-ui-design` is the Codex app-server transport/harness. It should be paired with Taste/frontend skills for taste, prompt discipline, and implementation discipline when available:
+
+- [`imagegen-frontend-web`](https://github.com/Leonxlnx/taste-skill/tree/main/skills/imagegen-frontend-web) — load before important `generate`, `upgrade`, or raw `imagegen` runs. Use it to make the Codex prompt more image-led, spacious, implementation-friendly, and less generic/AI-sloppy.
+- [`image-to-code`](https://github.com/Leonxlnx/taste-skill/tree/main/skills/image-to-code-skill) — load when turning a chosen Codex mockup into real code; treat the generated image as the primary spec and implement section-by-section.
+- [`design-taste-frontend`](https://github.com/Leonxlnx/taste-skill/tree/main/skills/taste-skill) / `frontend-stack` — use for technical implementation guardrails, anti-default UI decisions, and final code quality.
+
+Do not blindly load every Taste style preset. Use `imagegen-frontend-web` as the default Codex prompt partner for website/interface mockups; add `image-to-code` only when implementing from the selected image.
 
 ## When to use
 

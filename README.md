@@ -113,13 +113,16 @@ Sets a preferred `PI_FINDER_MODELS` fallback when the shell environment has not 
 A small routing skill for choosing the right local frontend/design skill mix without loading every overlapping UI skill at once.
 
 ### `codex-ui-design`
-Image-first UI design skill and scripts using local `codex app-server` + logged-in ChatGPT/Codex auth:
+Image-first UI design skill and scripts using local `codex app-server` + logged-in ChatGPT/Codex auth. It is the transport/harness; for best visual output, pair it with optional Taste skills such as [`imagegen-frontend-web`](https://github.com/Leonxlnx/taste-skill/tree/main/skills/imagegen-frontend-web) for Codex prompt art direction and [`image-to-code`](https://github.com/Leonxlnx/taste-skill/tree/main/skills/image-to-code-skill) when implementing a chosen mockup.
+
+Scripts:
 - `scripts/probe.sh`
 - `scripts/imagegen.sh`
 - `scripts/generate.sh`
 - `scripts/upgrade.sh`
 - `scripts/describe.sh`
 - `scripts/iterate.sh`
+- `scripts/screenshot.sh`
 
 ## Included in `extras/`, but not enabled by default
 
