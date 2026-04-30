@@ -79,13 +79,16 @@ Use this first if image generation is failing. It should return JSON with `ok: t
 
 ```bash
 bash scripts/imagegen.sh --prompt "Create a clean 1024x1024 abstract placeholder. No text." --out .codex-imagegen
+bash scripts/imagegen.sh --prompt "Use this reference image but redesign it as a premium app hero." --image ./reference.png --out .codex-imagegen
 bash scripts/imagegen.sh --prompts prompts.jsonl --concurrency 4 --out .codex-imagegen
 ```
 
-JSONL lines may be either plain prompt strings or objects:
+JSONL lines may be either plain prompt strings or objects. Object lines can include `images` as local paths or `{ "path" | "url", "label" }` objects. Relative image paths resolve relative to the JSONL file:
 
 ```jsonl
 {"id":"dashboard-a","prompt":"Use case: ui-mockup\nAsset type: first-pass dashboard reference\nPrimary request: ..."}
+{"id":"edit-reference","prompt":"Redesign this screenshot into a premium dashboard while preserving the core IA.","images":["./refs/current.png"]}
+{"id":"style-transfer","prompt":"Use Image 1 as layout target and Image 2 as visual style reference.","images":[{"path":"./refs/layout.png","label":"layout/edit target"},{"url":"https://example.com/style.png","label":"style reference"}]}
 ```
 
 Outputs:
