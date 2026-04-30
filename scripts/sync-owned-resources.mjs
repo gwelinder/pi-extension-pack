@@ -38,7 +38,7 @@ const localSkillSnapshots = ["fal-generate", "plannotator-compound", "video-prom
   to: path.join(repo, "extras", "local-skill-snapshots", name),
 }));
 
-const excludeNames = new Set(["node_modules", ".git", ".DS_Store", "logs", ".codex-ui-design", ".codex-imagegen"]);
+const excludeNames = new Set(["node_modules", ".git", ".DS_Store", "logs", ".codex-ui-design", ".codex-imagegen", "Icon\r"]);
 
 function rmrf(p) {
   fs.rmSync(p, { recursive: true, force: true });
