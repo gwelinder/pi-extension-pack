@@ -203,6 +203,7 @@ pi-extension-pack/
     skill-observer/
     skill-router/
     skill-update-checker/
+    local-skill-snapshots/
     claude-inspired-coach/
   docs/
     BOOTSTRAP.md

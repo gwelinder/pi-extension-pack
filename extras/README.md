@@ -23,5 +23,8 @@ Generic watched-source update checker:
 - requires real local git checkouts for watched sources
 - not enabled by default because the fork/filter strategy in `docs/UPSTREAM_STRATEGY.md` is the main recovery path
 
+### `local-skill-snapshots`
+Disaster-recovery copies of local skills not recorded in `~/.agents/.skill-lock.json` at inventory time. They are intentionally not auto-loaded by the package manifest.
+
 ### `claude-inspired-coach`
 Small prompt-layer nudge extension. Kept for reference, but the concrete tool/runtime extensions are the stronger default package.

@@ -1,6 +1,6 @@
 # Local Pi package inventory
 
-Generated: 2026-04-30T15:07:21.656Z
+Generated: 2026-04-30T15:08:52.621Z
 
 > This report intentionally lists paths and names only. It does not read or print auth/config contents.
 
@@ -8,7 +8,7 @@ Generated: 2026-04-30T15:07:21.656Z
 
 - repo: `/Users/gfw/code/pi-extension-pack`
 - default extensions: 8
-- extras: 4
+- extras: 5
 - packaged skills: 2
 
 ### Packaged default extensions

@@ -32,6 +32,12 @@ const ownedSkills = [
   },
 ];
 
+const localSkillSnapshots = ["fal-generate", "plannotator-compound", "video-prompting"].map((name) => ({
+  name,
+  from: path.join(home, ".agents", "skills", name),
+  to: path.join(repo, "extras", "local-skill-snapshots", name),
+}));
+
 const excludeNames = new Set(["node_modules", ".git", ".DS_Store", "logs", ".codex-ui-design", ".codex-imagegen"]);
 
 function rmrf(p) {
@@ -52,7 +58,8 @@ function copyDir(src, dst) {
   }
 }
 
-for (const item of [...ownedExtensions, ...ownedSkills]) {
+for (const item of [...ownedExtensions, ...ownedSkills, ...localSkillSnapshots]) {
+  if (!fs.existsSync(item.from) && localSkillSnapshots.includes(item)) continue;
   copyDir(item.from, item.to);
   console.log(`synced ${item.name}: ${item.from} -> ${path.relative(repo, item.to)}`);
 }
