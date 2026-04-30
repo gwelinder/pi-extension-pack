@@ -1,0 +1,9 @@
+{
+  "baseUrl": "https://cloudflare-codemode-worker.<you>.workers.dev",
+  "tokenEnvVar": "CF_CODEMODE_TOKEN",
+  "timeoutMs": 120000,
+  "requireApplyConfirmation": true,
+  "blockApplyWithoutUI": true,
+  "promptInjectionMode": "lazy",
+  "auditWidget": false
+}

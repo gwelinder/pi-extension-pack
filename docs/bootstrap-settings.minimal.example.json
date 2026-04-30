@@ -1,0 +1,16 @@
+{
+  "packages": [
+    "git:github.com/gwelinder/pi-extension-pack",
+    "npm:pi-interactive-shell",
+    "npm:pi-finder-subagent",
+    "npm:pi-librarian",
+    "npm:pi-subdir-context",
+    "npm:pi-prompt-template-model",
+    "npm:pi-interview",
+    "npm:pi-token-burden",
+    "npm:pi-design-deck",
+    "npm:pi-web-access",
+    "npm:@plannotator/pi-extension",
+    "git:github.com/gwelinder/pi-cloudflare-codemode"
+  ]
+}

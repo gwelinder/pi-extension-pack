@@ -8,6 +8,7 @@ type ToolState = {
   commands: string[];
   errors: string[];
   lastToolNames: string[];
+  sessionLineage?: string;
 };
 
 const NOTEBOOK_DIR = join(homedir(), ".pi", "agent", "session-notebooks");
@@ -18,6 +19,9 @@ const MAX_ERROR_LINES = 12;
 
 const TEMPLATE = `# Session Title
 _A short and distinctive 5-10 word descriptive title for the session. Super info dense, no filler._
+
+# Session Lineage
+_How this session started, whether it resumed or forked from another session, and any continuity notes worth preserving._
 
 # Current State
 _What is actively being worked on right now? Pending tasks not yet completed. Immediate next steps._
@@ -57,6 +61,11 @@ function ensureNotebook(path: string): void {
 
 function notebookPath(sessionId: string): string {
   return join(NOTEBOOK_DIR, `${sessionId}.md`);
+}
+
+function notebookPathFromSessionFile(sessionFile: string): string {
+  const fileName = basename(sessionFile).replace(/\.(jsonl|json)$/i, "");
+  return notebookPath(fileName);
 }
 
 function truncate(text: string, max = 240): string {
@@ -154,6 +163,7 @@ function titleFromText(input: string): string {
 function buildNotebook(sections: Record<string, string>): string {
   const ordered: Array<[string, string]> = [
     ["Session Title", "_A short and distinctive 5-10 word descriptive title for the session. Super info dense, no filler._"],
+    ["Session Lineage", "_How this session started, whether it resumed or forked from another session, and any continuity notes worth preserving._"],
     ["Current State", "_What is actively being worked on right now? Pending tasks not yet completed. Immediate next steps._"],
     ["Task Specification", "_What did the user ask to build? Any design decisions or other explanatory context._"],
     ["Files and Functions", "_What are the important files? In short, what do they contain and why are they relevant?_"],
@@ -193,10 +203,41 @@ export default function piSessionNotebook(pi: ExtensionAPI) {
   function stateFor(sessionId: string): ToolState {
     const existing = sessionState.get(sessionId);
     if (existing) return existing;
-    const next: ToolState = { paths: new Set(), commands: [], errors: [], lastToolNames: [] };
+    const next: ToolState = { paths: new Set(), commands: [], errors: [], lastToolNames: [], sessionLineage: undefined };
     sessionState.set(sessionId, next);
     return next;
   }
+
+  pi.on("session_start", (event, ctx) => {
+    const sessionId = ctx.sessionManager.getSessionId();
+    const path = notebookPath(sessionId);
+    const state = stateFor(sessionId);
+    state.paths = new Set();
+    state.commands = [];
+    state.errors = [];
+    state.lastToolNames = [];
+
+    let forkSeeded = false;
+    if (!existsSync(path) && event.reason === "fork" && event.previousSessionFile) {
+      const previousNotebookPath = notebookPathFromSessionFile(event.previousSessionFile);
+      if (existsSync(previousNotebookPath)) {
+        writeFileSync(path, readNotebook(previousNotebookPath), "utf8");
+        forkSeeded = true;
+      }
+    }
+
+    ensureNotebook(path);
+    const sections = parseNotebookSections(readNotebook(path));
+    const lineageLines = [
+      `- Start reason: ${event.reason}`,
+      `- Session file: ${ctx.sessionManager.getSessionFile() || "ephemeral"}`,
+    ];
+    if (event.previousSessionFile) lineageLines.push(`- Previous session: ${event.previousSessionFile}`);
+    if (forkSeeded) lineageLines.push(`- Fork continuity: seeded from previous notebook`);
+    state.sessionLineage = lineageLines.join("\n");
+    sections["Session Lineage"] = state.sessionLineage;
+    writeFileSync(path, buildNotebook(sections), "utf8");
+  });
 
   pi.on("tool_call", (event, ctx) => {
     const sessionId = ctx.sessionManager.getSessionId();
@@ -292,6 +333,7 @@ export default function piSessionNotebook(pi: ExtensionAPI) {
 
     const nextSections: Record<string, string> = {
       "Session Title": titleFromText(titleSeed),
+      "Session Lineage": state.sessionLineage || existing["Session Lineage"] || "",
       "Current State": currentState,
       "Task Specification": taskSpec,
       "Files and Functions": files,
@@ -308,9 +350,23 @@ export default function piSessionNotebook(pi: ExtensionAPI) {
   pi.registerCommand("notebook-status", {
     description: "Show the current session notebook path",
     handler: async (_args, ctx) => {
-      const path = notebookPath(ctx.sessionManager.getSessionId());
+      const sessionId = ctx.sessionManager.getSessionId();
+      const state = stateFor(sessionId);
+      const path = notebookPath(sessionId);
       ensureNotebook(path);
-      ctx.ui.notify(`Session notebook: ${path}`, "info");
+      const message = [`Session notebook: ${path}`, state.sessionLineage ? `Lineage: ${state.sessionLineage.replace(/\n/g, " | ")}` : null]
+        .filter(Boolean)
+        .join("\n");
+      ctx.ui.notify(message, "info");
+      pi.sendMessage({
+        customType: "notebook-status",
+        content: message,
+        display: true,
+        details: {
+          path,
+          sessionLineage: state.sessionLineage,
+        },
+      });
     },
   });
 }

@@ -5,7 +5,7 @@ import * as fs from "node:fs";
 import { homedir } from "node:os";
 import * as path from "node:path";
 
-type SkillLocation = "user" | "project" | "path" | "unknown";
+type SkillLocation = "user" | "project" | "temporary" | "unknown";
 
 type ToolErrorRecord = {
   toolName: string;
@@ -57,6 +57,9 @@ const DEFAULT_OBSERVER_ROOT = path.join(homedir(), ".pi", "agent", "skill-observ
 const DEFAULT_LOG_PATH = path.join(DEFAULT_OBSERVER_ROOT, "observations.ndjson");
 const DEFAULT_MANAGED_GLOBAL_DIR = path.join(homedir(), ".pi", "agent", "skills-managed", "active");
 const DEFAULT_MANAGED_PROJECT_SUBPATH = path.join(".pi", "skills-managed", "active");
+const LOG_ROTATE_MAX_BYTES = Number(process.env.COGNEE_SKILL_OBSERVER_MAX_LOG_BYTES || 10 * 1024 * 1024);
+const LOG_ROTATE_MAX_ARCHIVES = Math.max(1, Number(process.env.COGNEE_SKILL_OBSERVER_MAX_ARCHIVES || 3));
+const LOG_ROTATE_CHECK_INTERVAL_MS = Number(process.env.COGNEE_SKILL_OBSERVER_ROTATE_CHECK_INTERVAL_MS || 30_000);
 
 function toIso(ts = Date.now()): string {
   return new Date(ts).toISOString();
@@ -64,6 +67,14 @@ function toIso(ts = Date.now()): string {
 
 function ensureParentDir(filePath: string) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
+}
+
+function fileSizeMaybe(filePath: string): number {
+  try {
+    return fs.statSync(filePath).size;
+  } catch {
+    return 0;
+  }
 }
 
 function envTruthy(name: string, fallback = false): boolean {
@@ -219,30 +230,62 @@ function extractErrorMessage(result: unknown): string | undefined {
 
 const DAEMON_PID_FILE = path.join(DEFAULT_OBSERVER_ROOT, "cognee-state.daemon.pid");
 const DAEMON_LOG_FILE = path.join(DEFAULT_OBSERVER_ROOT, "daemon.log");
-const INGESTER_SCRIPT = path.join(homedir(), ".pi", "agent", "extensions", "skill-observer", "cognee_ingester.py");
+
+function resolvePackageDir(): string | undefined {
+  const envDir = process.env.PI_PACKAGE_DIR?.trim();
+  if (envDir) return path.resolve(envDir);
+  try {
+    if (typeof __dirname === "string" && __dirname) return path.resolve(__dirname);
+  } catch {}
+  return undefined;
+}
+
+function resolveIngesterScript(): string {
+  const envPath = process.env.COGNEE_SKILL_OBSERVER_INGESTER_PATH?.trim();
+  const packageDir = resolvePackageDir();
+  const candidates = [
+    envPath,
+    packageDir ? path.join(packageDir, "cognee_ingester.py") : undefined,
+    packageDir ? path.join(packageDir, "extras", "skill-observer", "cognee_ingester.py") : undefined,
+    path.join(homedir(), ".pi", "agent", "extensions", "skill-observer", "cognee_ingester.py"),
+  ].filter((candidate): candidate is string => Boolean(candidate));
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) return candidate;
+  }
+
+  return candidates[0] || path.join(DEFAULT_OBSERVER_ROOT, "cognee_ingester.py");
+}
+
+function getDaemonStatus(): { running: boolean; pid?: number; stalePidCleaned: boolean } {
+  let stalePidCleaned = false;
+  try {
+    if (!fs.existsSync(DAEMON_PID_FILE)) return { running: false, stalePidCleaned };
+    const pid = parseInt(fs.readFileSync(DAEMON_PID_FILE, "utf8").trim(), 10);
+    if (isNaN(pid)) {
+      try { fs.unlinkSync(DAEMON_PID_FILE); stalePidCleaned = true; } catch {}
+      return { running: false, stalePidCleaned };
+    }
+    process.kill(pid, 0);
+    return { running: true, pid, stalePidCleaned };
+  } catch {
+    try { fs.unlinkSync(DAEMON_PID_FILE); stalePidCleaned = true; } catch {}
+    return { running: false, stalePidCleaned };
+  }
+}
 
 function isDaemonRunning(): boolean {
-  try {
-    if (!fs.existsSync(DAEMON_PID_FILE)) return false;
-    const pid = parseInt(fs.readFileSync(DAEMON_PID_FILE, "utf8").trim(), 10);
-    if (isNaN(pid)) return false;
-    // Signal 0 checks if process exists without killing it
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    // Process doesn't exist or we can't signal it
-    try { fs.unlinkSync(DAEMON_PID_FILE); } catch {}
-    return false;
-  }
+  return getDaemonStatus().running;
 }
 
 function ensureDaemonRunning(): void {
   if (isDaemonRunning()) return;
-  if (!fs.existsSync(INGESTER_SCRIPT)) return;
+  const ingesterScript = resolveIngesterScript();
+  if (!fs.existsSync(ingesterScript)) return;
 
   try {
     const logFd = fs.openSync(DAEMON_LOG_FILE, "a");
-    const child = execFile("python3", [INGESTER_SCRIPT, "daemon"], {
+    const child = execFile("python3", [ingesterScript, "daemon"], {
       detached: true,
       stdio: ["ignore", logFd, logFd],
       env: { ...process.env },
@@ -264,6 +307,41 @@ export default function skillObserverExtension(pi: ExtensionAPI) {
 
   ensureParentDir(logPath);
 
+  let lastRotateCheckAt = 0;
+
+  function rotateLogsIfNeeded(force = false): { rotated: boolean; archives: string[]; currentSize: number } {
+    const now = Date.now();
+    if (!force && now - lastRotateCheckAt < LOG_ROTATE_CHECK_INTERVAL_MS) {
+      return { rotated: false, archives: [], currentSize: fileSizeMaybe(logPath) };
+    }
+    lastRotateCheckAt = now;
+
+    const currentSize = fileSizeMaybe(logPath);
+    if (currentSize <= 0 || currentSize < LOG_ROTATE_MAX_BYTES) {
+      return { rotated: false, archives: [], currentSize };
+    }
+
+    const archives: string[] = [];
+    try {
+      for (let i = LOG_ROTATE_MAX_ARCHIVES; i >= 1; i--) {
+        const src = `${logPath}.${i}`;
+        const dest = `${logPath}.${i + 1}`;
+        if (!fs.existsSync(src)) continue;
+        if (i === LOG_ROTATE_MAX_ARCHIVES) fs.rmSync(src, { force: true });
+        else fs.renameSync(src, dest);
+      }
+      fs.renameSync(logPath, `${logPath}.1`);
+      fs.writeFileSync(logPath, "", "utf8");
+      for (let i = 1; i <= LOG_ROTATE_MAX_ARCHIVES; i++) {
+        const candidate = `${logPath}.${i}`;
+        if (fs.existsSync(candidate)) archives.push(candidate);
+      }
+      return { rotated: true, archives, currentSize };
+    } catch {
+      return { rotated: false, archives, currentSize };
+    }
+  }
+
   let currentRun: ActiveRun | null = null;
   const toolCallIndex = new Map<string, { toolName: string; input: unknown; ts: number }>();
 
@@ -273,9 +351,28 @@ export default function skillObserverExtension(pi: ExtensionAPI) {
 
   const skillCatalogByName = new Map<string, SkillCatalogEntry>();
   const skillCatalogByPath = new Map<string, SkillCatalogEntry>();
+  let lastSessionStartMeta: { reason?: string; previousSessionFile?: string } = {};
 
   function emit(event: string, payload: Record<string, unknown>) {
     if (disabled) return;
+
+    const rotation = rotateLogsIfNeeded();
+    if (rotation.rotated) {
+      const rotateEvent = safeJsonStringify({
+        schema: SCHEMA,
+        event: "log_rotated",
+        ts: toIso(),
+        previousSizeBytes: rotation.currentSize,
+        logPath,
+        archives: rotation.archives,
+      });
+      try {
+        fs.appendFileSync(logPath, `${rotateEvent}\n`, "utf8");
+      } catch {
+        // Never break the agent flow because of observer logging.
+      }
+    }
+
     const line = safeJsonStringify({
       schema: SCHEMA,
       event,
@@ -314,19 +411,20 @@ export default function skillObserverExtension(pi: ExtensionAPI) {
     skillCatalogByName.clear();
     skillCatalogByPath.clear();
 
-    const commands = pi.getCommands().filter((command) => command.source === "skill");
+    const commands = pi.getCommands().filter((command) => command.source === "skill") as Array<any>;
 
     for (const command of commands) {
       const normalizedName = command.name.startsWith("skill:")
         ? command.name.slice("skill:".length)
         : command.name;
       const skillName = normalizedName.toLowerCase();
+      const sourceInfo = command.sourceInfo || {};
 
       const entry: SkillCatalogEntry = {
         name: skillName,
         commandName: command.name,
-        path: normalizePathMaybe(command.path, cwd),
-        location: (command.location || "unknown") as SkillLocation,
+        path: normalizePathMaybe(sourceInfo.path, cwd),
+        location: (["user", "project", "temporary"].includes(sourceInfo.scope) ? sourceInfo.scope : "unknown") as SkillLocation,
         description: command.description,
       };
 
@@ -348,7 +446,7 @@ export default function skillObserverExtension(pi: ExtensionAPI) {
       return {
         name: inferredName,
         path: normalized,
-        location: "path",
+        location: "unknown",
       };
     }
 
@@ -372,7 +470,7 @@ export default function skillObserverExtension(pi: ExtensionAPI) {
       return {
         name: inferredName,
         path: normalized,
-        location: "path",
+        location: "unknown",
       };
     }
 
@@ -456,17 +554,35 @@ export default function skillObserverExtension(pi: ExtensionAPI) {
     };
   });
 
-  pi.on("session_start", (_event, ctx) => {
+  pi.on("session_start", (event, ctx) => {
     refreshSkillCatalog(ctx.cwd);
     sessionSkillMemory.clear();
+    lastSessionStartMeta = {
+      reason: event.reason,
+      previousSessionFile: event.previousSessionFile,
+    };
+
+    const rotation = rotateLogsIfNeeded(true);
+    if (rotation.rotated) {
+      emit("log_rotated", {
+        previousSizeBytes: rotation.currentSize,
+        logPath,
+        archives: rotation.archives,
+        source: "session_start",
+      });
+    }
 
     emit("observer_session_start", {
       cwd: ctx.cwd,
       sessionId: ctx.sessionManager.getSessionId(),
       sessionFile: ctx.sessionManager.getSessionFile(),
+      reason: event.reason,
+      previousSessionFile: event.previousSessionFile,
       catalogSkillCount: skillCatalogByName.size,
       logPath,
       includeSensitiveText,
+      analyticsOnly,
+      ingesterScript: resolveIngesterScript(),
     });
 
     // The observer now serves as analytics/telemetry only by default.
@@ -690,6 +806,251 @@ export default function skillObserverExtension(pi: ExtensionAPI) {
     });
   });
 
+  function buildSkillAnalyticsReport(cwd: string, args: string): { message: string; details: Record<string, unknown> } {
+    const files = [
+      ...Array.from({ length: LOG_ROTATE_MAX_ARCHIVES }, (_v, i) => `${logPath}.${LOG_ROTATE_MAX_ARCHIVES - i}`),
+      logPath,
+    ].filter((candidate) => fs.existsSync(candidate));
+
+    const runCwds = new Map<string, string>();
+    const endedRunIds = new Set<string>();
+    const runSkills = new Map<string, Set<string>>();
+    const skillPaths = new Map<string, Map<string, number>>();
+    const eventCounts = new Map<string, number>();
+    let eventCount = 0;
+    let runStartCount = 0;
+    let runEndCount = 0;
+    let minTs = "";
+    let maxTs = "";
+
+    function projectLabel(rawCwd: string | undefined): string {
+      if (!rawCwd) return "(unknown)";
+      const normalized = path.normalize(rawCwd);
+      const codeRoot = path.join(homedir(), "code");
+      const rel = path.relative(codeRoot, normalized);
+      if (!rel || rel === "") return "(code-root)";
+      if (!rel.startsWith("..") && !path.isAbsolute(rel)) return rel.split(path.sep)[0] || "(code-root)";
+      return normalized;
+    }
+
+    function classifySkillPath(skillPath: string | undefined): string {
+      if (!skillPath || skillPath === "?") return "unknown";
+      const normalized = path.normalize(skillPath);
+      const codeRoot = path.join(homedir(), "code");
+      const rel = path.relative(codeRoot, normalized);
+      if (!rel.startsWith("..") && !path.isAbsolute(rel)) {
+        if (normalized.includes(`${path.sep}.pi${path.sep}skills${path.sep}`) || normalized.includes(`${path.sep}.pi${path.sep}skills-managed${path.sep}active${path.sep}`)) {
+          return `project-local:${rel.split(path.sep)[0] || "code-root"}`;
+        }
+      }
+      if (normalized.includes(`${path.sep}.pi${path.sep}agent${path.sep}skills-managed${path.sep}active${path.sep}`)) return "global-managed";
+      if (normalized.includes(`${path.sep}.pi${path.sep}agent${path.sep}skills${path.sep}`)) return "global-user";
+      if (normalized.includes(`${path.sep}node_modules${path.sep}`) || normalized.includes(`${path.sep}lib${path.sep}node_modules${path.sep}`)) return "package";
+      return "other";
+    }
+
+    function incrementCounter(map: Map<string, number>, key: string, by = 1) {
+      map.set(key, (map.get(key) || 0) + by);
+    }
+
+    function rememberSkill(runId: string | undefined, name: string | undefined, skillPath?: string) {
+      if (!runId || !name) return;
+      const normalizedName = name.toLowerCase();
+      let skills = runSkills.get(runId);
+      if (!skills) {
+        skills = new Set<string>();
+        runSkills.set(runId, skills);
+      }
+      skills.add(normalizedName);
+      if (skillPath) {
+        let pathsForSkill = skillPaths.get(normalizedName);
+        if (!pathsForSkill) {
+          pathsForSkill = new Map<string, number>();
+          skillPaths.set(normalizedName, pathsForSkill);
+        }
+        incrementCounter(pathsForSkill, skillPath);
+      }
+    }
+
+    for (const file of files) {
+      let raw = "";
+      try {
+        raw = fs.readFileSync(file, "utf8");
+      } catch {
+        continue;
+      }
+
+      for (const line of raw.split("\n")) {
+        if (!line.trim()) continue;
+        let o: any;
+        try {
+          o = JSON.parse(line);
+        } catch {
+          continue;
+        }
+
+        eventCount += 1;
+        if (typeof o.event === "string") incrementCounter(eventCounts, o.event);
+        if (typeof o.ts === "string") {
+          if (!minTs || o.ts < minTs) minTs = o.ts;
+          if (!maxTs || o.ts > maxTs) maxTs = o.ts;
+        }
+
+        if (o.event === "run_start") {
+          runStartCount += 1;
+          if (o.runId && o.cwd) runCwds.set(o.runId, o.cwd);
+          if (o.runId && typeof o.explicitSkillName === "string") rememberSkill(o.runId, o.explicitSkillName);
+          continue;
+        }
+
+        if (o.event === "skill_loaded") {
+          const skill = o.skill || {};
+          if (o.runId && o.cwd) runCwds.set(o.runId, o.cwd);
+          rememberSkill(o.runId, skill.name, skill.path || o.readPath);
+          continue;
+        }
+
+        if (o.event === "run_end") {
+          runEndCount += 1;
+          if (o.runId) endedRunIds.add(o.runId);
+          if (o.runId && o.cwd) runCwds.set(o.runId, o.cwd);
+          for (const loaded of Array.isArray(o.loadedSkills) ? o.loadedSkills : []) {
+            if (typeof loaded === "string") rememberSkill(o.runId, loaded);
+            else rememberSkill(o.runId, loaded?.name, loaded?.path);
+          }
+        }
+      }
+    }
+
+    const skillStats = new Map<string, { runs: Set<string>; projects: Map<string, number>; pathClasses: Map<string, number> }>();
+    for (const [runId, skills] of runSkills.entries()) {
+      const project = projectLabel(runCwds.get(runId));
+      for (const skill of skills) {
+        let stat = skillStats.get(skill);
+        if (!stat) {
+          stat = { runs: new Set<string>(), projects: new Map<string, number>(), pathClasses: new Map<string, number>() };
+          skillStats.set(skill, stat);
+        }
+        stat.runs.add(runId);
+        incrementCounter(stat.projects, project);
+      }
+    }
+
+    for (const [skill, pathsForSkill] of skillPaths.entries()) {
+      const stat = skillStats.get(skill);
+      if (!stat) continue;
+      for (const [skillPath, count] of pathsForSkill.entries()) {
+        incrementCounter(stat.pathClasses, classifySkillPath(skillPath), count);
+      }
+    }
+
+    const rows = [...skillStats.entries()].map(([name, stat]) => {
+      const projectEntries = [...stat.projects.entries()].sort((a, b) => b[1] - a[1]);
+      const classEntries = [...stat.pathClasses.entries()].sort((a, b) => b[1] - a[1]);
+      const runs = stat.runs.size;
+      const topProject = projectEntries[0]?.[0] || "-";
+      const topProjectCount = projectEntries[0]?.[1] || 0;
+      return {
+        name,
+        runs,
+        projects: stat.projects.size,
+        topProject,
+        topProjectCount,
+        concentration: runs > 0 ? topProjectCount / runs : 0,
+        dominantClass: classEntries[0]?.[0] || "unknown",
+      };
+    }).sort((a, b) => b.runs - a.runs || a.name.localeCompare(b.name));
+
+    const currentCatalog = new Set<string>();
+    for (const root of getManagedSkillRoots(cwd)) {
+      for (const skillFile of discoverSkillFilesFromRoot(root)) {
+        const lower = path.basename(skillFile).toLowerCase();
+        const name = lower === "skill.md"
+          ? path.basename(path.dirname(skillFile)).toLowerCase()
+          : path.basename(skillFile, path.extname(skillFile)).toLowerCase();
+        if (name) currentCatalog.add(name);
+      }
+    }
+
+    const usedSkillNames = new Set(rows.map((row) => row.name));
+    const unusedManaged = [...currentCatalog].filter((name) => !usedSkillNames.has(name)).sort();
+    const endedWithSkills = [...endedRunIds].filter((runId) => (runSkills.get(runId)?.size || 0) > 0).length;
+    const percent = (value: number) => `${Math.round(value * 100)}%`;
+    const fmtDate = (ts: string) => ts ? ts.slice(0, 10) : "unknown";
+    const limitMatch = args.match(/\b(?:top|limit)\s*=?\s*(\d{1,3})\b/i);
+    const topLimit = Math.max(5, Math.min(50, limitMatch ? Number(limitMatch[1]) : 15));
+
+    function formatRows(selected: typeof rows, limit = topLimit): string[] {
+      return selected.slice(0, limit).map((row) => {
+        const name = row.name.padEnd(34).slice(0, 34);
+        return `  ${name} ${String(row.runs).padStart(4)}  ${String(row.projects).padStart(2)} projects  top=${row.topProject}:${percent(row.concentration)}  ${row.dominantClass}`;
+      });
+    }
+
+    const broad = rows.filter((row) => row.runs >= 5 && row.projects >= 4 && row.concentration <= 0.5);
+    const projectSpecific = rows
+      .filter((row) => row.runs >= 3 && row.concentration >= 0.8)
+      .sort((a, b) => b.concentration - a.concentration || b.runs - a.runs || a.name.localeCompare(b.name));
+    const projectLocal = rows.filter((row) => row.dominantClass.startsWith("project-local:"));
+
+    const lines = [
+      `Skill analytics (${fmtDate(minTs)} → ${fmtDate(maxTs)})`,
+      `Events: ${eventCount.toLocaleString()}  Runs: ${runStartCount.toLocaleString()} started / ${runEndCount.toLocaleString()} ended`,
+      `Runs with skills: ${endedWithSkills.toLocaleString()} / ${runEndCount.toLocaleString()} = ${runEndCount ? percent(endedWithSkills / runEndCount) : "n/a"}`,
+      `Current managed catalog: ${currentCatalog.size} skills; unused observed: ${unusedManaged.length}`,
+      "",
+      `Top skills by distinct runs:`,
+      ...formatRows(rows),
+      "",
+      `Broad reusable skills:`,
+      ...formatRows(broad, 12),
+      "",
+      `Project-specific candidates:`,
+      ...formatRows(projectSpecific, 18),
+      "",
+      `Project-local skills by path:`,
+      ...formatRows(projectLocal, 14),
+      "",
+      `Unused current managed skills:`,
+      unusedManaged.length ? `  ${unusedManaged.slice(0, 40).join(", ")}${unusedManaged.length > 40 ? " …" : ""}` : "  (none)",
+      "",
+      `Tip: /skill-analytics top=30 for a longer top-skills section.`,
+    ];
+
+    return {
+      message: lines.join("\n"),
+      details: {
+        files,
+        eventCount,
+        eventCounts: Object.fromEntries(eventCounts.entries()),
+        runStartCount,
+        runEndCount,
+        endedWithSkills,
+        dateRange: { minTs, maxTs },
+        topSkills: rows.slice(0, 50),
+        broadReusable: broad.slice(0, 50),
+        projectSpecific: projectSpecific.slice(0, 50),
+        projectLocal: projectLocal.slice(0, 50),
+        unusedManaged,
+      },
+    };
+  }
+
+  pi.registerCommand("skill-analytics", {
+    description: "Show skill usage analytics, reusable skills, project-specific candidates, and unused managed skills",
+    handler: async (args, ctx) => {
+      refreshSkillCatalog(ctx.cwd);
+      const report = buildSkillAnalyticsReport(ctx.cwd, args || "");
+      ctx.ui.notify(report.message, "info");
+      pi.sendMessage({
+        customType: "skill-analytics",
+        content: report.message,
+        display: true,
+        details: report.details,
+      });
+    },
+  });
+
   pi.registerCommand("skill-daemon", {
     description: "Check/start/stop the legacy cognee skill-observer daemon",
     handler: async (args, ctx) => {
@@ -733,30 +1094,44 @@ export default function skillObserverExtension(pi: ExtensionAPI) {
       }
 
       // Default: status
-      const running = isDaemonRunning();
-      let pid = "(none)";
-      try {
-        if (fs.existsSync(DAEMON_PID_FILE)) {
-          pid = fs.readFileSync(DAEMON_PID_FILE, "utf8").trim();
-        }
-      } catch {}
-      const msg = `Legacy Cognee daemon: ${running ? "RUNNING" : "STOPPED"} (pid=${pid})\nLog: ${DAEMON_LOG_FILE}\nDefault mode: analytics-only (${analyticsOnly ? "enabled" : "disabled"})\n\nCommands: /skill-daemon start | stop | log`;
+      const daemon = getDaemonStatus();
+      const pid = daemon.pid != null ? String(daemon.pid) : "(none)";
+      const msg = [
+        `Legacy Cognee daemon: ${daemon.running ? "RUNNING" : "STOPPED"} (pid=${pid})`,
+        `Mode: ${analyticsOnly ? "analytics-only by default; daemon opt-in" : "legacy daemon enabled"}`,
+        `Daemon log: ${DAEMON_LOG_FILE}`,
+        daemon.stalePidCleaned ? `Stale PID file: cleaned` : `Stale PID file: not detected`,
+        "",
+        "Commands: /skill-daemon start | stop | log",
+      ].join("\n");
       ctx.ui.notify(msg, "info");
       pi.sendMessage({ customType: "skill-daemon", content: msg, display: true });
     },
   });
 
   pi.registerCommand("skill-observer-status", {
-    description: "Show skill-observer analytics status and legacy Cognee details",
+    description: "Show skill-observer analytics status, log health, and legacy Cognee details",
     handler: async (_args, ctx) => {
       refreshSkillCatalog(ctx.cwd);
 
+      const daemon = getDaemonStatus();
       const roots = getManagedSkillRoots(ctx.cwd);
+      const logSize = fileSizeMaybe(logPath);
+      const archiveCount = Array.from({ length: LOG_ROTATE_MAX_ARCHIVES }, (_v, i) => `${logPath}.${i + 1}`)
+        .filter((candidate) => fs.existsSync(candidate)).length;
+      const ingesterScript = resolveIngesterScript();
       const lines = [
         `Skill observer: ${disabled ? "disabled" : "active"}`,
-        `Role: analytics / telemetry only`,
-        `Legacy Cognee daemon auto-start: ${analyticsOnly ? "disabled (opt-in only)" : "enabled"}`,
+        `Role: analytics / telemetry`,
+        `Legacy Cognee daemon mode: ${analyticsOnly ? "opt-in only" : "enabled"}`,
+        `Daemon running: ${daemon.running ? "yes" : "no"}`,
+        `Stale PID cleaned on check: ${daemon.stalePidCleaned ? "yes" : "no"}`,
+        `Last session start reason: ${lastSessionStartMeta.reason || "unknown"}`,
+        `Previous session file: ${lastSessionStartMeta.previousSessionFile || "(none)"}`,
+        `Ingester script: ${ingesterScript}`,
         `Log file: ${logPath}`,
+        `Log size: ${Math.round(logSize / 1024)} KB`,
+        `Log rotation: ${Math.round(LOG_ROTATE_MAX_BYTES / 1024 / 1024)} MB max, ${LOG_ROTATE_MAX_ARCHIVES} archives kept (${archiveCount} present)`,
         `Include text previews: ${includeSensitiveText ? "yes" : "no"}`,
         `Cataloged skill commands: ${skillCatalogByName.size}`,
         "Managed skill roots:",
@@ -772,10 +1147,17 @@ export default function skillObserverExtension(pi: ExtensionAPI) {
         details: {
           disabled,
           logPath,
+          logSize,
           includeSensitiveText,
           catalogSkillCount: skillCatalogByName.size,
           roots,
           analyticsOnly,
+          daemon,
+          ingesterScript,
+          lastSessionStartMeta,
+          logRotateMaxBytes: LOG_ROTATE_MAX_BYTES,
+          logRotateMaxArchives: LOG_ROTATE_MAX_ARCHIVES,
+          archiveCount,
         },
       });
     },

@@ -3,3 +3,26 @@ node_modules/
 *.log
 *.pyc
 __pycache__/
+
+# Pi/local state and generated outputs
+.cx/
+.pi/
+*.jsonl
+state.json
+run-history.jsonl
+session-notebooks/
+sessions/
+logs/
+cache/
+generated-images/
+.codex-ui-design/
+.codex-imagegen/
+
+# Secrets/config snapshots must be represented by docs/*.example.json only
+auth.json
+settings.json
+cloudflare-codemode.json
+*.token
+*.secret
+.env
+.env.*

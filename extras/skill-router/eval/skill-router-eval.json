@@ -1,0 +1,242 @@
+[
+  {
+    "id": "ab-test-01",
+    "task": "Can you help me set up an A/B test for two signup page headlines and tell me what metrics and sample size I should watch?",
+    "correctSkills": ["ab-test-setup"],
+    "notes": "Experiment design and measurement"
+  },
+  {
+    "id": "ad-creative-01",
+    "task": "Write 20 Facebook ad headline and primary-text variations for a new productivity app launch.",
+    "correctSkills": ["ad-creative"],
+    "notes": "Bulk ad variation generation"
+  },
+  {
+    "id": "ai-sdk-01",
+    "task": "I want to build a chat feature with streamText, tool calling, and structured output using the Vercel AI SDK.",
+    "correctSkills": ["ai-sdk"],
+    "notes": "Direct AI SDK usage"
+  },
+  {
+    "id": "analytics-01",
+    "task": "Map out the events we should track for onboarding completion, plan upgrades, and retention in PostHog.",
+    "correctSkills": ["analytics-tracking"],
+    "notes": "Analytics instrumentation"
+  },
+  {
+    "id": "cloudflare-01",
+    "task": "Explain how to structure a Cloudflare Workers app with KV, R2, and D1 for a small SaaS backend.",
+    "correctSkills": ["cloudflare", "wrangler"],
+    "notes": "Cloudflare architecture; Wrangler is also acceptable"
+  },
+  {
+    "id": "cold-email-01",
+    "task": "Write a cold outbound email sequence for selling custom AI automation services to agencies.",
+    "correctSkills": ["cold-email", "email-sequence"],
+    "notes": "Either direct cold-email or broader email-sequence is acceptable"
+  },
+  {
+    "id": "copy-editing-01",
+    "task": "Please edit this landing page copy to be tighter, cleaner, and less repetitive without changing the meaning.",
+    "correctSkills": ["copy-editing"],
+    "notes": "Editing existing copy"
+  },
+  {
+    "id": "copywriting-01",
+    "task": "Write homepage copy for a startup that turns long videos into short social clips automatically.",
+    "correctSkills": ["copywriting"],
+    "notes": "Net-new marketing copy"
+  },
+  {
+    "id": "durable-objects-01",
+    "task": "I need a Durable Object websocket room with presence and ordered message delivery. How should I build it?",
+    "correctSkills": ["durable-objects", "cloudflare"],
+    "notes": "Durable Objects primary, Cloudflare acceptable"
+  },
+  {
+    "id": "ffmpeg-01",
+    "task": "Use ffmpeg to extract the audio from this mp4, normalize it, and trim the first 12 seconds.",
+    "correctSkills": ["ffmpeg"],
+    "notes": "Direct ffmpeg task"
+  },
+  {
+    "id": "frontend-design-01",
+    "task": "Design a cleaner dashboard layout for this B2B analytics product with better hierarchy and spacing.",
+    "correctSkills": ["frontend-design", "web-design-guidelines"],
+    "notes": "UI design work"
+  },
+  {
+    "id": "next-01",
+    "task": "What are the best practices for data fetching, caching, and route structure in a modern Next.js app?",
+    "correctSkills": ["next-best-practices"],
+    "notes": "Next.js-specific best-practice query"
+  },
+  {
+    "id": "pdf-01",
+    "task": "Pull the key contract terms out of this PDF and summarize the renewal and termination clauses.",
+    "correctSkills": ["pdf"],
+    "notes": "PDF extraction / analysis"
+  },
+  {
+    "id": "qmd-01",
+    "task": "Set up QMD so I can index a repo, search it from the CLI, and expose it over MCP for agent use.",
+    "correctSkills": ["qmd"],
+    "notes": "Direct QMD setup"
+  },
+  {
+    "id": "remotion-01",
+    "task": "Help me structure a Remotion project for reusable scenes, predictable renders, and good composition hygiene.",
+    "correctSkills": ["remotion-best-practices"],
+    "notes": "Remotion project guidance"
+  },
+  {
+    "id": "schema-01",
+    "task": "Add the right schema markup for an FAQ page and a product page, and explain what JSON-LD to emit.",
+    "correctSkills": ["schema-markup"],
+    "notes": "Structured data implementation"
+  },
+  {
+    "id": "seo-audit-01",
+    "task": "Audit this site for technical SEO issues, thin pages, indexing problems, and obvious on-page fixes.",
+    "correctSkills": ["seo-audit"],
+    "notes": "Classic SEO audit"
+  },
+  {
+    "id": "shadcn-01",
+    "task": "Install shadcn/ui in this app and scaffold a dialog, table, and toast the right way.",
+    "correctSkills": ["shadcn"],
+    "notes": "shadcn install / component workflow"
+  },
+  {
+    "id": "site-architecture-01",
+    "task": "Map out the site architecture for a new documentation-heavy SaaS so content and navigation scale well.",
+    "correctSkills": ["site-architecture"],
+    "notes": "Information architecture"
+  },
+  {
+    "id": "social-content-01",
+    "task": "Turn this product announcement into a week of LinkedIn and X posts with different hooks.",
+    "correctSkills": ["social-content"],
+    "notes": "Social repurposing"
+  },
+  {
+    "id": "supabase-01",
+    "task": "Review this Postgres schema and RLS setup for a Supabase app and call out any bad patterns.",
+    "correctSkills": ["supabase-postgres-best-practices"],
+    "notes": "Supabase / Postgres best practices"
+  },
+  {
+    "id": "turborepo-01",
+    "task": "Our Turborepo builds are slow and cache misses are weird. Help me debug the pipeline and task graph.",
+    "correctSkills": ["turborepo"],
+    "notes": "Turborepo-specific debugging"
+  },
+  {
+    "id": "uiwiki-01",
+    "task": "I need quick guidance on a UI pattern for a command palette, empty states, and filter chips.",
+    "correctSkills": ["userinterface-wiki"],
+    "notes": "UI pattern lookup"
+  },
+  {
+    "id": "vercel-comp-01",
+    "task": "What are the best Vercel composition patterns for splitting a large app into cleaner deployment units?",
+    "correctSkills": ["vercel-composition-patterns"],
+    "notes": "Vercel composition guidance"
+  },
+  {
+    "id": "vercel-react-01",
+    "task": "Give me Vercel-flavored best practices for React app structure, deployment, and performance.",
+    "correctSkills": ["vercel-react-best-practices"],
+    "notes": "Vercel + React guidance"
+  },
+  {
+    "id": "video-prompting-01",
+    "task": "Write a strong prompt for an AI video generator to create a moody handheld product teaser with specific camera moves.",
+    "correctSkills": ["video-prompting"],
+    "notes": "Prompting video models"
+  },
+  {
+    "id": "video-understanding-01",
+    "task": "Watch this product demo video and tell me the exact moment where the pricing slide appears and what it says.",
+    "correctSkills": ["video-understanding"],
+    "notes": "Video analysis / extraction"
+  },
+  {
+    "id": "visual-explainer-01",
+    "task": "Create a visual architecture explainer for this system with a clean diagram and a simple annotated HTML view.",
+    "correctSkills": ["visual-explainer"],
+    "notes": "Visual communication / diagramming"
+  },
+  {
+    "id": "voice-dna-01",
+    "task": "Analyze these writing samples and describe the author’s voice so we can mimic it consistently in future copy.",
+    "correctSkills": ["voice-dna"],
+    "notes": "Voice analysis"
+  },
+  {
+    "id": "web-design-01",
+    "task": "Give me practical web design guidelines for improving readability, spacing, and CTA emphasis on this page.",
+    "correctSkills": ["web-design-guidelines"],
+    "notes": "General web design heuristics"
+  },
+  {
+    "id": "wrangler-01",
+    "task": "Set up Wrangler for this Workers repo, configure environments, and show me how to deploy safely.",
+    "correctSkills": ["wrangler", "cloudflare"],
+    "notes": "Wrangler primary, Cloudflare acceptable"
+  },
+  {
+    "id": "fal-01",
+    "task": "Generate a product hero image with Fal and help me wire the right model and params into the app.",
+    "correctSkills": ["fal-generate"],
+    "notes": "Fal image generation"
+  },
+  {
+    "id": "runway-01",
+    "task": "How should I prompt and structure a Runway shot for a cinematic before/after transformation video?",
+    "correctSkills": ["runwayml"],
+    "notes": "Runway-specific workflow"
+  },
+  {
+    "id": "kling-01",
+    "task": "I want to do image-to-video transformation in Kling with strong motion but preserve the subject identity.",
+    "correctSkills": ["kling-v2v"],
+    "notes": "Kling v2v-specific guidance"
+  },
+  {
+    "id": "wacli-01",
+    "task": "Use the WhatsApp CLI to send this message blast and verify delivery status for the latest contacts.",
+    "correctSkills": ["wacli"],
+    "notes": "WhatsApp CLI workflow"
+  },
+  {
+    "id": "pptx-01",
+    "task": "Create a short investor deck in PowerPoint format from these bullets and keep the slide structure clean.",
+    "correctSkills": ["pptx"],
+    "notes": "PowerPoint / deck creation"
+  },
+  {
+    "id": "model-duel-01",
+    "task": "Generate a few competing UI versions for this landing page and compare them side by side in a review deck.",
+    "correctSkills": ["model-duel-deck"],
+    "notes": "Model comparison deck"
+  },
+  {
+    "id": "referral-01",
+    "task": "Design a referral program for a subscription product and explain incentives, abuse controls, and rollout.",
+    "correctSkills": ["referral-program"],
+    "notes": "Referral strategy"
+  },
+  {
+    "id": "pricing-01",
+    "task": "Help me rethink our SaaS pricing tiers and packaging so self-serve conversion improves.",
+    "correctSkills": ["pricing-strategy"],
+    "notes": "Pricing / packaging strategy"
+  },
+  {
+    "id": "prog-seo-01",
+    "task": "Plan a programmatic SEO play that can scale to thousands of long-tail pages without becoming spammy.",
+    "correctSkills": ["programmatic-seo"],
+    "notes": "Programmatic SEO strategy"
+  }
+]

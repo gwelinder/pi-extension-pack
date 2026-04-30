@@ -1,15 +1,20 @@
 # pi-extension-pack
 
-A curated Pi package that bundles the most generally useful extensions built during this Pi upgrade pass:
+A curated Pi bootstrap package for Gustav's owned Pi extensions, owned skills, and recovery docs.
+
+Included by default:
 
 - **`bash-fixer`** — conservative bash mistake repair before execution
 - **`tool-fixer`** — better `read` / `edit` recovery and diagnostics
 - **`pi-memory-system`** — Claude-style persistent markdown memory
 - **`pi-session-notebook`** — structured per-session continuity notebook
 - **`pi-magic-docs`** — living architecture docs with autonomous maintenance
+- **`codex-ui-gallery`** — high-quality native Pi gallery for Codex UI image outputs
+- **`frontend-stack`** — local frontend/design skill router
+- **`codex-ui-design`** — image-first UI design workflow via Codex app-server
 
-The default manifest enables the production-ready extensions under `extensions/`.
-More experimental or more locally-coupled pieces live in `extras/`.
+The default manifest enables production-ready resources under `extensions/` and `skills/`.
+More experimental or locally-coupled pieces live in `extras/`.
 
 ## Why this package exists
 
@@ -21,6 +26,7 @@ The package focuses on four things:
 2. **store durable context in readable markdown files**
 3. **preserve session continuity across long runs and compaction**
 4. **keep architecture docs alive with low-friction maintenance**
+5. **recover owned Pi UI/design workflows from GitHub without depending on this MacBook**
 
 ## Included by default
 
@@ -46,6 +52,8 @@ Adds Claude-style durable markdown memory under `~/.pi/agent/memory/`:
 - scoped storage: user, project, private
 - `MEMORY.md` indexes
 - selective memory recall into the system prompt
+- background extraction guarded to memory directories only
+- `/memory-status` now reports counts, index truncation state, selector mode, and extraction diagnostics
 
 Commands:
 - `/remember`
@@ -75,18 +83,64 @@ Tracks markdown files whose first line is `# MAGIC DOC: ...` and treats them as 
 - autonomous maintenance after idle assistant runs
 - cooldown-gated auto-queueing
 - tight scoped edit guard during update mode
+- `/magic-docs-status` now includes maintenance counters for queued updates, edits, and no-op passes
 
 Commands:
 - `/magic-docs-status`
 - `/magic-docs-update [path]`
+
+### `codex-ui-gallery`
+High-quality native Pi TUI image gallery for `codex-ui-design` outputs:
+- opens generated `summary.json`, output directories, or image paths
+- renders with Pi's native terminal image component outside overlays
+- supports multi-image navigation and screen-height fitting
+
+Commands/tool:
+- `/codex-gallery [output-dir|summary.json|image-path]`
+- `/codex-image <image-path>`
+- `/codex-gallery-clear`
+- tool: `show_codex_ui_gallery`
+
+### `frontend-stack`
+A small routing skill for choosing the right local frontend/design skill mix without loading every overlapping UI skill at once.
+
+### `codex-ui-design`
+Image-first UI design skill and scripts using local `codex app-server` + logged-in ChatGPT/Codex auth:
+- `scripts/probe.sh`
+- `scripts/imagegen.sh`
+- `scripts/generate.sh`
+- `scripts/upgrade.sh`
+- `scripts/describe.sh`
+- `scripts/iterate.sh`
 
 ## Included in `extras/`, but not enabled by default
 
 ### `skill-observer`
 Kept in `extras/skill-observer/` because it is still somewhat transitional:
 - analytics-first now, but still contains legacy Cognee integration
-- bundles shell/python helper scripts
+- legacy daemon behavior is opt-in; the default role is telemetry / analytics
+- status output reports daemon health, stale-PID cleanup, and log rotation state
+- bundles shell/python helper scripts with package-relative / `PI_PACKAGE_DIR`-aware resolution
 - likely deserves its own package after further cleanup
+
+### `skill-router`
+Experimental gated skill discovery in `extras/skill-router/`:
+- pairs with a curated visible-core / hidden-specialist skill policy
+- indexes Pi's live discovered skill command catalog, then enriches entries from `SKILL.md` frontmatter (no parallel catalog)
+- injects only top hidden candidates on the first user turn when confidence clears a measured floor
+- exposes exactly one explicit user lookup command: `/skill-find <query>`
+- also provides a model-callable `skill_lookup` tool with compact self-rendered output for later-turn discovery
+- ships with offline eval assets and scorer scripts under `extras/skill-router/eval/`
+- intentionally not enabled by default until longer-term usage proves the policy stable
+
+### `skill-update-checker`
+Generic watched-source update checker in `extras/skill-update-checker/`:
+- inspired by PSPDFKit's `pi-skills-update-checker`
+- built for external skill sources that change upstream more often than your local copies
+- checks configured watched git sources daily on session start
+- keeps pending update reminders until the local source catches up
+- exposes `/skill-updates-status` and `/skill-updates-check`
+- requires a real local git checkout for each watched source; copied skill folders alone are not enough
 
 ### `claude-inspired-coach`
 A lightweight prompt coach kept as reference only. It is not enabled by default because the concrete runtime/tooling extensions are the main value here.
@@ -129,9 +183,26 @@ pi-extension-pack/
     pi-memory-system/
     pi-session-notebook/
     pi-magic-docs/
+    codex-ui-gallery/
+  skills/
+    frontend-stack/
+    codex-ui-design/
+  prompts/
+  themes/
   extras/
     skill-observer/
+    skill-router/
+    skill-update-checker/
     claude-inspired-coach/
+  docs/
+    BOOTSTRAP.md
+    INVENTORY.md
+    SECRETS.md
+    UPSTREAM_STRATEGY.md
+  scripts/
+    audit-local.mjs
+    check-no-secrets.mjs
+    sync-owned-resources.mjs
   package.json
   README.md
   LICENSE
@@ -139,8 +210,11 @@ pi-extension-pack/
 
 ## Notes
 
-- The default package manifest only loads `./extensions`.
+- The default package manifest loads `./extensions`, `./skills`, `./prompts`, and `./themes`.
 - `extras/` is included for reference and future extraction, but is not auto-loaded by Pi.
+- Third-party skills should usually remain external/forked package sources with filters; see `docs/UPSTREAM_STRATEGY.md`.
+- Secret-bearing config is represented by examples only; see `docs/SECRETS.md`.
+- When a local owned resource is ahead of the repo, run `npm run sync:owned`, review, then commit so the repository stays canonical.
 - The extensions are designed for Pi's TypeScript extension loader, so no build step is required.
 - Licensed under MIT.
 

@@ -1,7 +1,7 @@
 {
   "name": "pi-extension-pack",
   "version": "0.1.0",
-  "description": "A curated Pi package for safer tool use, persistent markdown memory, session notebooks, and autonomous Magic Docs maintenance.",
+  "description": "A curated Pi bootstrap package for owned extensions, owned skills, and recovery docs for Gustav's Pi setup.",
   "license": "MIT",
   "keywords": [
     "pi-package",
@@ -9,10 +9,20 @@
     "pi-extension",
     "magic-docs",
     "memory",
-    "session-notebook"
+    "session-notebook",
+    "codex-ui-design",
+    "frontend-stack"
   ],
+  "scripts": {
+    "audit": "node scripts/audit-local.mjs",
+    "check:secrets": "node scripts/check-no-secrets.mjs",
+    "sync:owned": "node scripts/sync-owned-resources.mjs"
+  },
   "peerDependencies": {
-    "@mariozechner/pi-coding-agent": "*"
+    "@mariozechner/pi-ai": "*",
+    "@mariozechner/pi-coding-agent": "*",
+    "@mariozechner/pi-tui": "*",
+    "typebox": "*"
   },
   "repository": {
     "type": "git",
@@ -24,13 +34,27 @@
   },
   "files": [
     "extensions",
+    "skills",
+    "prompts",
+    "themes",
     "extras",
+    "docs",
+    "scripts",
     "README.md",
     "LICENSE"
   ],
   "pi": {
     "extensions": [
       "./extensions"
+    ],
+    "skills": [
+      "./skills"
+    ],
+    "prompts": [
+      "./prompts"
+    ],
+    "themes": [
+      "./themes"
     ]
   }
 }

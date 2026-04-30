@@ -1,0 +1,9 @@
+{
+  "name": "codex-ui-design-runtime",
+  "version": "0.1.0",
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "puppeteer": "^24.42.0"
+  }
+}

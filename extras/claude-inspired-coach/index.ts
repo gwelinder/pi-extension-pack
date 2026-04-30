@@ -19,7 +19,8 @@ export default function claudeInspiredCoach(pi: ExtensionAPI) {
   pi.on("before_agent_start", (event) => {
     const addition = `
 # Working style
-- Prefer dedicated tools over bash for file reads, edits, writes, and search.
+- Prefer dedicated Pi tools over bash for file reads, edits, writes, and search.
+- For discovery, prefer built-in find/grep/ls first, and prefer finder for broad workspace reconnaissance before falling back to bash fd/rg/ls glue.
 - Read files before proposing or making edits. Understand existing code before changing it.
 - Do not broaden scope beyond what the user asked. Avoid speculative abstractions and unnecessary cleanup.
 - Prefer absolute paths and avoid cd when possible.

@@ -1,13 +1,13 @@
 # skill-observer (Pi extension)
 
-Self-improving skills for Pi, powered by [cognee-skills](https://github.com/topoteretes/cognee).
+Analytics-first skill telemetry for Pi, with optional legacy Cognee self-improvement tooling.
 
-Skills are no longer static prompt files — they observe their own execution, detect failures, and propose fixes automatically.
+The extension’s default role is to observe runs, skill loads, and tool failures into NDJSON so you can understand how Pi is actually behaving. The older Cognee daemon workflow is still available, but it is now treated as an explicit opt-in path rather than the default operating mode.
 
 ## How it works
 
-1. **Pi extension** (`index.ts`) hooks into agent lifecycle, logs runs to NDJSON
-2. **Cognee daemon** runs in the background, continuously:
+1. **Pi extension** (`index.ts`) hooks into agent lifecycle and logs telemetry to NDJSON
+2. **Optional Cognee daemon** can run in the background when explicitly enabled:
    - Observes new runs → `skills.observe()`
    - Checks for skills with accumulated failures
    - Auto-inspects failing skills → `skills.inspect()`
@@ -32,18 +32,25 @@ pip install 'cognee==0.5.4.dev2'
 /reload
 ```
 
-## The daemon starts automatically
+## Daemon mode is opt-in
 
-On `session_start`, the extension auto-launches the cognee daemon.
-No manual intervention needed. Disable with `COGNEE_SKILL_OBSERVER_NO_DAEMON=1`.
+By default, the extension stays in analytics / telemetry mode only.
+To enable the legacy Cognee daemon path, set `COGNEE_SKILL_OBSERVER_ENABLE_DAEMON=1` before starting Pi. You can still disable auto-start separately with `COGNEE_SKILL_OBSERVER_NO_DAEMON=1`.
 
-Check status in Pi:
+Status and analytics in Pi:
+
 ```
+/skill-observer-status
+/skill-analytics
+/skill-analytics top=30
 /skill-daemon
 /skill-daemon log
 /skill-daemon stop
 /skill-daemon start
 ```
+
+`/skill-observer-status` reports log size, rotation settings, archive count, daemon health, and whether a stale PID was cleaned during the last check.
+`/skill-analytics` reports top skills, broad reusable skills, project-specific candidates, project-local skills, and unused managed skills from the NDJSON telemetry logs.
 
 Or manually:
 ```bash
@@ -95,9 +102,12 @@ Or manually:
 | Variable | Default | Description |
 |---|---|---|
 | `COGNEE_SKILL_OBSERVER_DISABLED` | `false` | Disable the extension entirely |
-| `COGNEE_SKILL_OBSERVER_NO_DAEMON` | `false` | Don't auto-start the daemon |
+| `COGNEE_SKILL_OBSERVER_ENABLE_DAEMON` | `false` | Opt into the legacy Cognee daemon mode |
+| `COGNEE_SKILL_OBSERVER_NO_DAEMON` | `false` | In daemon mode, don't auto-start the daemon |
 | `COGNEE_SKILL_OBSERVER_INCLUDE_TEXT` | `false` | Include task/response text in logs |
 | `COGNEE_SKILL_OBSERVER_LOG_PATH` | `~/.pi/agent/skill-observer/observations.ndjson` | NDJSON log path |
+| `COGNEE_SKILL_OBSERVER_MAX_LOG_BYTES` | `10485760` | Rotate active NDJSON log when it exceeds this size |
+| `COGNEE_SKILL_OBSERVER_MAX_ARCHIVES` | `3` | Number of rotated NDJSON archives to keep |
 | `GEMINI_API_KEY` | — | Used for LLM enrichment + inspect/amend |
 | `OPENAI_API_KEY` | — | Fallback LLM if no Gemini key |
 
@@ -111,6 +121,13 @@ skill fails → observe records it → daemon detects threshold
   → evaluate: before/after scores compared
   → rollback: one call to revert if fix didn't help
 ```
+
+## Operational notes
+
+- The active NDJSON log rotates automatically once it exceeds the configured size limit.
+- `/skill-analytics` reads the active NDJSON log plus retained archives; increase `COGNEE_SKILL_OBSERVER_MAX_ARCHIVES` if you need longer trend windows.
+- Stale daemon PID files are cleaned during health checks so `/skill-daemon` and `/skill-observer-status` reflect reality.
+- If you are developing locally and your installed copy under `~/.pi/agent/extensions/skill-observer/` differs from the repo, update the repo first and then sync/reinstall the runtime copy.
 
 ## Architecture
 

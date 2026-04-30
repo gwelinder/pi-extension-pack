@@ -1,0 +1,325 @@
+{
+  "packages": [
+    "git:github.com/gwelinder/pi-extension-pack",
+    "npm:pi-interactive-shell",
+    "npm:pi-finder-subagent",
+    "npm:pi-librarian",
+    "npm:pi-subdir-context",
+    "npm:pi-prompt-template-model",
+    "npm:pi-interview",
+    "npm:pi-token-burden",
+    "npm:pi-design-deck",
+    "npm:pi-web-access",
+    "npm:@plannotator/pi-extension",
+    "git:github.com/gwelinder/pi-cloudflare-codemode",
+    {
+      "source": "git:github.com/anthropics/skills",
+      "extensions": [],
+      "skills": [
+        "skills/frontend-design/SKILL.md",
+        "skills/pdf/SKILL.md",
+        "skills/pptx/SKILL.md",
+        "skills/skill-creator/SKILL.md"
+      ],
+      "prompts": [],
+      "themes": []
+    },
+    {
+      "source": "git:github.com/cloudflare/skills",
+      "extensions": [],
+      "skills": [
+        "skills/cloudflare/SKILL.md",
+        "skills/durable-objects/SKILL.md",
+        "skills/wrangler/SKILL.md"
+      ],
+      "prompts": [],
+      "themes": []
+    },
+    {
+      "source": "git:github.com/coreyhaines31/marketingskills",
+      "extensions": [],
+      "skills": [
+        "skills/ab-test-setup/SKILL.md",
+        "skills/ad-creative/SKILL.md",
+        "skills/ai-seo/SKILL.md",
+        "skills/analytics-tracking/SKILL.md",
+        "skills/churn-prevention/SKILL.md",
+        "skills/cold-email/SKILL.md",
+        "skills/competitor-alternatives/SKILL.md",
+        "skills/content-strategy/SKILL.md",
+        "skills/copy-editing/SKILL.md",
+        "skills/copywriting/SKILL.md",
+        "skills/email-sequence/SKILL.md",
+        "skills/form-cro/SKILL.md",
+        "skills/free-tool-strategy/SKILL.md",
+        "skills/launch-strategy/SKILL.md",
+        "skills/lead-magnets/SKILL.md",
+        "skills/marketing-ideas/SKILL.md",
+        "skills/marketing-psychology/SKILL.md",
+        "skills/onboarding-cro/SKILL.md",
+        "skills/page-cro/SKILL.md",
+        "skills/paid-ads/SKILL.md",
+        "skills/paywall-upgrade-cro/SKILL.md",
+        "skills/popup-cro/SKILL.md",
+        "skills/pricing-strategy/SKILL.md",
+        "skills/product-marketing-context/SKILL.md",
+        "skills/programmatic-seo/SKILL.md",
+        "skills/referral-program/SKILL.md",
+        "skills/revops/SKILL.md",
+        "skills/sales-enablement/SKILL.md",
+        "skills/schema-markup/SKILL.md",
+        "skills/seo-audit/SKILL.md",
+        "skills/signup-flow-cro/SKILL.md",
+        "skills/site-architecture/SKILL.md",
+        "skills/social-content/SKILL.md"
+      ],
+      "prompts": [],
+      "themes": []
+    },
+    {
+      "source": "git:github.com/digitalsamba/claude-code-video-toolkit",
+      "extensions": [],
+      "skills": [
+        ".claude/skills/ffmpeg/SKILL.md"
+      ],
+      "prompts": [],
+      "themes": []
+    },
+    {
+      "source": "git:github.com/emilkowalski/skill",
+      "extensions": [],
+      "skills": [
+        "skills/emil-design-eng/SKILL.md"
+      ],
+      "prompts": [],
+      "themes": []
+    },
+    {
+      "source": "git:github.com/figma/mcp-server-guide",
+      "extensions": [],
+      "skills": [
+        "skills/implement-design/SKILL.md"
+      ],
+      "prompts": [],
+      "themes": []
+    },
+    {
+      "source": "git:github.com/jakubkrehel/make-interfaces-feel-better",
+      "extensions": [],
+      "skills": [
+        "skills/make-interfaces-feel-better/SKILL.md"
+      ],
+      "prompts": [],
+      "themes": []
+    },
+    {
+      "source": "git:github.com/Leonxlnx/taste-skill",
+      "extensions": [],
+      "skills": [
+        "skills/brandkit/SKILL.md",
+        "skills/image-to-code-skill/SKILL.md",
+        "skills/imagegen-frontend-web/SKILL.md",
+        "skills/output-skill/SKILL.md",
+        "skills/redesign-skill/SKILL.md",
+        "skills/taste-skill/SKILL.md"
+      ],
+      "prompts": [],
+      "themes": []
+    },
+    {
+      "source": "git:github.com/levineam/qmd-skill",
+      "extensions": [],
+      "skills": [
+        "SKILL.md"
+      ],
+      "prompts": [],
+      "themes": []
+    },
+    {
+      "source": "git:github.com/mattpocock/skills",
+      "extensions": [],
+      "skills": [
+        "grill-me/SKILL.md"
+      ],
+      "prompts": [],
+      "themes": []
+    },
+    {
+      "source": "git:github.com/millionco/expect",
+      "extensions": [],
+      "skills": [
+        ".agents/skills/expect/SKILL.md"
+      ],
+      "prompts": [],
+      "themes": []
+    },
+    {
+      "source": "git:github.com/openai/skills",
+      "extensions": [],
+      "skills": [
+        "skills/.curated/frontend-skill/SKILL.md"
+      ],
+      "prompts": [],
+      "themes": []
+    },
+    {
+      "source": "git:github.com/pbakaus/impeccable",
+      "extensions": [],
+      "skills": [
+        ".claude/skills/adapt/SKILL.md",
+        ".claude/skills/animate/SKILL.md",
+        ".claude/skills/arrange/SKILL.md",
+        ".claude/skills/audit/SKILL.md",
+        ".claude/skills/bolder/SKILL.md",
+        ".claude/skills/clarify/SKILL.md",
+        ".claude/skills/colorize/SKILL.md",
+        ".claude/skills/critique/SKILL.md",
+        ".claude/skills/delight/SKILL.md",
+        ".claude/skills/distill/SKILL.md",
+        ".claude/skills/extract/SKILL.md",
+        ".claude/skills/harden/SKILL.md",
+        ".claude/skills/normalize/SKILL.md",
+        ".claude/skills/onboard/SKILL.md",
+        ".claude/skills/optimize/SKILL.md",
+        ".claude/skills/overdrive/SKILL.md",
+        ".claude/skills/polish/SKILL.md",
+        ".claude/skills/quieter/SKILL.md",
+        ".claude/skills/teach-impeccable/SKILL.md",
+        ".claude/skills/typeset/SKILL.md"
+      ],
+      "prompts": [],
+      "themes": []
+    },
+    {
+      "source": "git:github.com/raphaelsalaja/userinterface-wiki",
+      "extensions": [],
+      "skills": [
+        "skills/SKILL.md"
+      ],
+      "prompts": [],
+      "themes": []
+    },
+    {
+      "source": "git:github.com/remotion-dev/skills",
+      "extensions": [],
+      "skills": [
+        "skills/remotion/SKILL.md"
+      ],
+      "prompts": [],
+      "themes": []
+    },
+    {
+      "source": "git:github.com/runwayml/skills",
+      "extensions": [],
+      "skills": [
+        "api/SKILL.md"
+      ],
+      "prompts": [],
+      "themes": []
+    },
+    {
+      "source": "git:github.com/sawyerhood/dev-browser",
+      "extensions": [],
+      "skills": [
+        "skills/dev-browser/SKILL.md"
+      ],
+      "prompts": [],
+      "themes": []
+    },
+    {
+      "source": "git:github.com/shadcn/ui",
+      "extensions": [],
+      "skills": [
+        "skills/shadcn/SKILL.md"
+      ],
+      "prompts": [],
+      "themes": []
+    },
+    {
+      "source": "git:github.com/steipete/clawdis",
+      "extensions": [],
+      "skills": [
+        "skills/wacli/SKILL.md"
+      ],
+      "prompts": [],
+      "themes": []
+    },
+    {
+      "source": "git:github.com/steveyegge/beads",
+      "extensions": [],
+      "skills": [
+        "claude-plugin/skills/beads/SKILL.md"
+      ],
+      "prompts": [],
+      "themes": []
+    },
+    {
+      "source": "git:github.com/subsy/ralph-tui",
+      "extensions": [],
+      "skills": [
+        "skills/ralph-tui-create-beads/SKILL.md",
+        "skills/ralph-tui-create-json/SKILL.md",
+        "skills/ralph-tui-prd/SKILL.md"
+      ],
+      "prompts": [],
+      "themes": []
+    },
+    {
+      "source": "git:github.com/supabase/agent-skills",
+      "extensions": [],
+      "skills": [
+        "skills/postgres-best-practices/SKILL.md"
+      ],
+      "prompts": [],
+      "themes": []
+    },
+    {
+      "source": "git:github.com/vercel-labs/agent-skills",
+      "extensions": [],
+      "skills": [
+        "skills/composition-patterns/SKILL.md",
+        "skills/react-best-practices/SKILL.md",
+        "skills/web-design-guidelines/SKILL.md"
+      ],
+      "prompts": [],
+      "themes": []
+    },
+    {
+      "source": "git:github.com/vercel-labs/next-skills",
+      "extensions": [],
+      "skills": [
+        "skills/next-best-practices/SKILL.md",
+        "skills/next-cache-components/SKILL.md"
+      ],
+      "prompts": [],
+      "themes": []
+    },
+    {
+      "source": "git:github.com/vercel/ai",
+      "extensions": [],
+      "skills": [
+        "skills/use-ai-sdk/SKILL.md"
+      ],
+      "prompts": [],
+      "themes": []
+    },
+    {
+      "source": "git:github.com/vercel/ai-elements",
+      "extensions": [],
+      "skills": [
+        "skills/ai-elements/SKILL.md"
+      ],
+      "prompts": [],
+      "themes": []
+    },
+    {
+      "source": "git:github.com/vercel/turborepo",
+      "extensions": [],
+      "skills": [
+        "skills/turborepo/SKILL.md"
+      ],
+      "prompts": [],
+      "themes": []
+    }
+  ]
+}

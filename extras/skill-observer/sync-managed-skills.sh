@@ -67,9 +67,6 @@ link_skill "bolder"               "$HOME_DIR/.pi/agent/skills/bolder/SKILL.md"
 link_skill "clarify"              "$HOME_DIR/.pi/agent/skills/clarify/SKILL.md"
 link_skill "colorize"             "$HOME_DIR/.pi/agent/skills/colorize/SKILL.md"
 link_skill "critique"             "$HOME_DIR/.pi/agent/skills/critique/SKILL.md"
-link_skill "harden"               "$HOME_DIR/.pi/agent/skills/harden/SKILL.md"
-link_skill "normalize"            "$HOME_DIR/.pi/agent/skills/normalize/SKILL.md"
-link_skill "onboard"              "$HOME_DIR/.pi/agent/skills/onboard/SKILL.md"
 link_skill "optimize"             "$HOME_DIR/.pi/agent/skills/optimize/SKILL.md"
 link_skill "quieter"              "$HOME_DIR/.pi/agent/skills/quieter/SKILL.md"
 
@@ -80,45 +77,30 @@ link_skill "next-best-practices"           "$HOME_DIR/.pi/agent/skills/next-best
 
 # ── Copywriting / Content ──
 link_skill "copywriting"          "$HOME_DIR/.agents/skills/copywriting/SKILL.md"
-link_skill "copy-editing"         "$HOME_DIR/.agents/skills/copy-editing/SKILL.md"
 link_skill "content-strategy"     "$HOME_DIR/.agents/skills/content-strategy/SKILL.md"
 
 # ── SEO / Growth ──
 link_skill "seo-audit"            "$HOME_DIR/.pi/agent/skills/seo-audit/SKILL.md"
 link_skill "ai-seo"               "$HOME_DIR/.agents/skills/ai-seo/SKILL.md"
-link_skill "programmatic-seo"     "$HOME_DIR/.agents/skills/programmatic-seo/SKILL.md"
 link_skill "analytics-tracking"   "$HOME_DIR/.agents/skills/analytics-tracking/SKILL.md"
 
 # ── CRO / Conversion ──
 link_skill "page-cro"             "$HOME_DIR/.agents/skills/page-cro/SKILL.md"
-link_skill "form-cro"             "$HOME_DIR/.agents/skills/form-cro/SKILL.md"
-link_skill "popup-cro"            "$HOME_DIR/.agents/skills/popup-cro/SKILL.md"
-link_skill "onboarding-cro"       "$HOME_DIR/.agents/skills/onboarding-cro/SKILL.md"
-link_skill "paywall-upgrade-cro"  "$HOME_DIR/.agents/skills/paywall-upgrade-cro/SKILL.md"
 link_skill "ab-test-setup"        "$HOME_DIR/.agents/skills/ab-test-setup/SKILL.md"
 
 # ── Marketing ──
 link_skill "ad-creative"          "$HOME_DIR/.agents/skills/ad-creative/SKILL.md"
-link_skill "cold-email"           "$HOME_DIR/.agents/skills/cold-email/SKILL.md"
-link_skill "competitor-alternatives" "$HOME_DIR/.agents/skills/competitor-alternatives/SKILL.md"
-link_skill "launch-strategy"      "$HOME_DIR/.agents/skills/launch-strategy/SKILL.md"
 link_skill "marketing-ideas"      "$HOME_DIR/.agents/skills/marketing-ideas/SKILL.md"
 link_skill "marketing-psychology" "$HOME_DIR/.agents/skills/marketing-psychology/SKILL.md"
-link_skill "paid-ads"             "$HOME_DIR/.agents/skills/paid-ads/SKILL.md"
+# paid-ads is intentionally project-local for kvitaavatn; do not expose it globally here.
 link_skill "product-marketing-context" "$HOME_DIR/.agents/skills/product-marketing-context/SKILL.md"
 
 # ── Retention / Monetization ──
-link_skill "churn-prevention"     "$HOME_DIR/.agents/skills/churn-prevention/SKILL.md"
 link_skill "pricing-strategy"     "$HOME_DIR/.agents/skills/pricing-strategy/SKILL.md"
-link_skill "referral-program"     "$HOME_DIR/.agents/skills/referral-program/SKILL.md"
-link_skill "free-tool-strategy"   "$HOME_DIR/.agents/skills/free-tool-strategy/SKILL.md"
 
 # ── Signup ──
-link_skill "signup-flow-cro"      "$HOME_DIR/.agents/skills/signup-flow-cro/SKILL.md"
 
 # ── Sales & GTM ──
-link_skill "revops"               "$HOME_DIR/.pi/agent/skills/revops/SKILL.md"
-link_skill "sales-enablement"     "$HOME_DIR/.pi/agent/skills/sales-enablement/SKILL.md"
 
 # ── SEO Architecture ──
 link_skill "site-architecture"    "$HOME_DIR/.pi/agent/skills/site-architecture/SKILL.md"
@@ -127,7 +109,6 @@ echo ""
 echo "[DONE] $(find "$MANAGED_ROOT" -name SKILL.md -type l | wc -l | tr -d ' ') skills linked into: $MANAGED_ROOT"
 
 # ── Remaining active skills ──
-link_skill "email-sequence"       "$HOME_DIR/.agents/skills/email-sequence/SKILL.md"
 link_skill "social-content"       "$HOME_DIR/.agents/skills/social-content/SKILL.md"
 link_skill "schema-markup"        "$HOME_DIR/.agents/skills/schema-markup/SKILL.md"
 link_skill "runwayml"             "$HOME_DIR/.agents/skills/runwayml/SKILL.md"
