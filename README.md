@@ -155,6 +155,26 @@ A lightweight prompt coach kept as reference only. It is not enabled by default 
 
 ## Install
 
+### Selected resources only
+
+Users do **not** have to load everything in this public repo. Pi supports package filters in `settings.json`, for example:
+
+```json
+{
+  "packages": [
+    {
+      "source": "git:github.com/gwelinder/pi-extension-pack",
+      "extensions": ["extensions/codex-ui-gallery/**"],
+      "skills": [],
+      "prompts": [],
+      "themes": []
+    }
+  ]
+}
+```
+
+See `docs/SELECTIVE_INSTALL.md` for copy-paste profiles.
+
 ### From a local path
 
 ```bash
@@ -209,6 +229,7 @@ pi-extension-pack/
     BOOTSTRAP.md
     INVENTORY.md
     SECRETS.md
+    SELECTIVE_INSTALL.md
     UPSTREAM_STRATEGY.md
   scripts/
     audit-local.mjs
