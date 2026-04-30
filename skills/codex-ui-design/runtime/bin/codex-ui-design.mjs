@@ -29,13 +29,15 @@ function usage() { return `codex-ui-design — image-first UI design via Codex a
 Commands:
   probe [--model MODEL] [--out DIR]
   imagegen --prompt TEXT [--image IMG ...] | --prompts prompts.jsonl [--out DIR] [--concurrency N]
-  generate --context TEXT [--variants N] [--concurrency N] [--out DIR]
-  upgrade --target FILE_OR_URL [--context TEXT] [--variants N] [--concurrency N] [--out DIR]
+  generate --context TEXT|--context-file FILE [--variants N] [--direction SLUG] [--list-directions] [--out DIR]
+  upgrade --target FILE_OR_URL [--context TEXT|--context-file FILE] [--variants N] [--direction SLUG] [--out DIR]
   describe --image PNG [--out DIR]
   iterate --target FILE_OR_URL --reference PNG [--out DIR]
+  screenshot --target FILE_OR_URL --out PNG [--width N] [--height N] [--full-page]
 
 Env:
   CODEX_UI_MODEL       default ${DEFAULT_MODEL}
+  CODEX_UI_DIRECTION   optional forced direction slug(s), comma-separated
   CODEX_UI_KEEP_SERVER set 1 to leave app-servers running
 `; }
 
@@ -135,8 +137,41 @@ function buildInput({ text, images = [], imagegen = false, opts }) {
 }
 
 async function runTurn(rpc, job, opts) {
-  const th = await startThread(rpc, opts); const threadId = th.thread.id; let turnId = null; const imageItems = [], rawImageItems = [], messages = [], warnings = [];
-  const done = new Promise((resolve, reject) => { const timer = setTimeout(() => { off(); reject(new Error(`turn timeout for ${job.id || "turn"}`)); }, opts.turnTimeoutMs); const off = rpc.onNotification((msg) => { const p = msg.params || {}; if (p.threadId && p.threadId !== threadId) return; if (msg.method === "turn/started") turnId = p.turn?.id || p.turnId || turnId; if (msg.method === "warning") warnings.push(p.message || JSON.stringify(p)); if (msg.method === "error") warnings.push(p.message || JSON.stringify(p)); if (msg.method === "item/completed") { const item = p.item; if (item?.type === "imageGeneration") imageItems.push(item); if (item?.type === "agentMessage" && item.text) messages.push(item.text); } if (msg.method === "rawResponseItem/completed") { const item = p.item; if (item?.type === "image_generation_call") rawImageItems.push(item); if (item?.type === "message" && item.role === "assistant") { const txt = (item.content || []).map(c => c.text || "").join("").trim(); if (txt) messages.push(txt); } } if (msg.method === "item/agentMessage/delta" && p.delta) { /* keep final item text if emitted */ } if (msg.method === "turn/completed") { clearTimeout(timer); off(); resolve(p.turn); } }); });
+  const th = await startThread(rpc, opts);
+  const threadId = th.thread.id;
+  let turnId = null;
+  const imageItems = [], rawImageItems = [], messages = [], warnings = [];
+  let agentDelta = "";
+  const done = new Promise((resolve, reject) => {
+    const timer = setTimeout(() => { off(); reject(new Error(`turn timeout for ${job.id || "turn"}`)); }, opts.turnTimeoutMs);
+    const off = rpc.onNotification((msg) => {
+      const p = msg.params || {};
+      if (p.threadId && p.threadId !== threadId) return;
+      if (msg.method === "turn/started") turnId = p.turn?.id || p.turnId || turnId;
+      if (msg.method === "warning") warnings.push(p.message || JSON.stringify(p));
+      if (msg.method === "error") warnings.push(p.message || JSON.stringify(p));
+      if (msg.method === "item/completed") {
+        const item = p.item;
+        if (item?.type === "imageGeneration") imageItems.push(item);
+        if (item?.type === "agentMessage" && item.text) messages.push(item.text);
+      }
+      if (msg.method === "rawResponseItem/completed") {
+        const item = p.item;
+        if (item?.type === "image_generation_call") rawImageItems.push(item);
+        if (item?.type === "message" && item.role === "assistant") {
+          const txt = (item.content || []).map(c => c.text || "").join("").trim();
+          if (txt) messages.push(txt);
+        }
+      }
+      if (msg.method === "item/agentMessage/delta" && p.delta) agentDelta += p.delta;
+      if (msg.method === "turn/completed") {
+        if (agentDelta.trim()) messages.push(agentDelta.trim());
+        clearTimeout(timer);
+        off();
+        resolve(p.turn);
+      }
+    });
+  });
   await rpc.send("turn/start", { threadId, input: buildInput({ text: job.prompt, images: job.images, imagegen: job.imagegen, opts }), cwd: opts.cwd, approvalPolicy: "never", model: opts.model }, opts.rpcTimeoutMs);
   const turn = await done;
   return { job, threadId, turnId: turnId || turn?.id || null, turnStatus: turn?.status || null, turnError: turn?.error || null, imageItems, rawImageItems, messages, warnings };
@@ -155,15 +190,137 @@ async function persistImage(run, opts) {
   return { finalPath, metadataPath, metadata };
 }
 
-async function worker(workerId, queue, opts, results) { await withServer(opts, async (rpc) => { while (queue.length) { const job = queue.shift(); try { const run = await runTurn(rpc, { ...job, imagegen: true }, opts); const p = await persistImage(run, opts); results.push({ id: job.id, ok: true, workerId, ...p }); console.error(`[worker ${workerId}] ${job.id} -> ${p.finalPath}`); } catch (e) { results.push({ id: job.id, ok: false, workerId, error: e.message }); console.error(`[worker ${workerId}] ${job.id} failed: ${e.message}`); } } }); }
-async function runImageJobs(jobs, opts) { const queue = [...jobs]; const results = []; const c = Math.min(asInt(opts.concurrency, 1), jobs.length || 1); await fs.mkdir(opts.outDir, { recursive: true }); await Promise.all(Array.from({ length: c }, (_, i) => worker(i + 1, queue, opts, results))); const summary = { ok: results.every(r => r.ok), concurrency: c, total: results.length, succeeded: results.filter(r => r.ok).length, failed: results.filter(r => !r.ok).length, results }; const summaryPath = path.join(opts.outDir, "summary.json"); await fs.writeFile(summaryPath, `${JSON.stringify(summary, null, 2)}\n`); return { summary, summaryPath }; }
+async function worker(workerId, queue, opts, results) {
+  await withServer(opts, async (rpc) => {
+    while (queue.length) {
+      const job = queue.shift();
+      try {
+        const run = await runTurn(rpc, { ...job, imagegen: true }, opts);
+        const p = await persistImage(run, opts);
+        results.push({ index: job.__index, id: job.id, ok: true, workerId, ...p });
+        console.error(`[worker ${workerId}] ${job.id} -> ${p.finalPath}`);
+      } catch (e) {
+        results.push({ index: job.__index, id: job.id, ok: false, workerId, error: e.message });
+        console.error(`[worker ${workerId}] ${job.id} failed: ${e.message}`);
+      }
+    }
+  });
+}
+async function runImageJobs(jobs, opts) {
+  const queue = jobs.map((job, index) => ({ ...job, __index: index }));
+  const results = [];
+  const c = Math.min(asInt(opts.concurrency, 1), jobs.length || 1);
+  await fs.mkdir(opts.outDir, { recursive: true });
+  await Promise.all(Array.from({ length: c }, (_, i) => worker(i + 1, queue, opts, results)));
+  const ordered = results.sort((a, b) => (a.index ?? 0) - (b.index ?? 0)).map(({ index, ...r }) => r);
+  const summary = { ok: ordered.every(r => r.ok), concurrency: c, total: ordered.length, succeeded: ordered.filter(r => r.ok).length, failed: ordered.filter(r => !r.ok).length, results: ordered };
+  const summaryPath = path.join(opts.outDir, "summary.json");
+  await fs.writeFile(summaryPath, `${JSON.stringify(summary, null, 2)}\n`);
+  return { summary, summaryPath };
+}
 
-async function screenshot(target, outPath) { const puppeteer = await import("puppeteer"); const browser = await puppeteer.default.launch({ headless: "new" }); try { const page = await browser.newPage(); await page.setViewport({ width: 1920, height: 2880, deviceScaleFactor: 1 }); const url = /^https?:|^file:/.test(target) ? target : pathToFileURL(path.resolve(target)).href; await page.goto(url, { waitUntil: "networkidle0", timeout: 60_000 }); await sleep(1000); await page.screenshot({ path: outPath, type: "png", fullPage: false }); } finally { await browser.close(); } }
-function pickDirections(n) { return DIRECTIONS.slice().sort(() => Math.random() - 0.5).slice(0, Math.min(n, DIRECTIONS.length)); }
-function uiPrompt({ context, direction, mode }) { const [slug, vibe] = direction; const lead = mode === "upgrade" ? "You are editing the attached screenshot into a much stronger production UI reference. Preserve visible copy, brand name, nav semantics, CTA meaning, and information architecture; radically improve composition, type, imagery, palette, spacing, components, and visual system." : "You are designing a new interface from scratch from the brief below. Create a complete, credible desktop UI mockup that can be implemented as a real web product, landing page, dashboard, or app surface."; return `${lead}\n\nBRIEF / CONTEXT:\n${context || "No extra context provided."}\n\nDIRECTION: ${slug}\n${vibe}\n\nMake a concrete art-direction choice based on the product: product image, photography, illustration/character, typography, diagram/information graphic, or graphic system. Do not default to generic SaaS cards, blue CTAs, emoji decoration, Inter-only typography, or bland dashboard chrome. The output should look like a high-end interface screenshot, not an abstract poster.\n\nRender as a tall desktop web UI screenshot, 1440–1920px wide and up to 2880px tall, front-on, no browser chrome, no device frame, no watermark, readable text, no broken glyphs, no duplicated words.`; }
-const SPEC_PROMPT = `You are a senior design engineer. The attached image is the approved target UI design. Write an implementation build spec for Pi to reproduce it in real code. Output Markdown only with: # Design spec, ## Hard constraints, ## Summary, ## Canvas & palette, ## Typography, ## Layout & sections, ## Components & micro-details, ## Implementation notes. Be concise, numeric, and specific.`;
+async function screenshot(target, outPath, { width = 1920, height = 2880, fullPage = false, deviceScaleFactor = 1 } = {}) {
+  const puppeteer = await import("puppeteer");
+  await fs.mkdir(path.dirname(outPath), { recursive: true });
+  const browser = await puppeteer.default.launch({ headless: "new" });
+  try {
+    const page = await browser.newPage();
+    await page.setViewport({ width, height, deviceScaleFactor });
+    const url = /^https?:|^file:/.test(target) ? target : pathToFileURL(path.resolve(target)).href;
+    await page.goto(url, { waitUntil: "networkidle0", timeout: 60_000 });
+    await sleep(1000);
+    await page.screenshot({ path: outPath, type: "png", fullPage });
+  } finally {
+    await browser.close();
+  }
+}
+function printDirections() { for (const [slug, vibe] of DIRECTIONS) console.log(`${slug.padEnd(22)} ${vibe}`); }
+function pickDirections(n, forced = process.env.CODEX_UI_DIRECTION) {
+  const requested = toArray(forced).flatMap((v) => String(v || "").split(",")).map((v) => v.trim()).filter(Boolean);
+  if (requested.length) {
+    const selected = requested.map((slug) => {
+      const match = DIRECTIONS.find(([s]) => s === slug);
+      if (!match) throw new Error(`Unknown design direction "${slug}". Run generate --list-directions to see options.`);
+      return match;
+    });
+    if (selected.length === 1) return Array.from({ length: Math.max(1, n) }, () => selected[0]);
+    return selected.slice(0, Math.max(1, n));
+  }
+  return DIRECTIONS.slice().sort(() => Math.random() - 0.5).slice(0, Math.min(n, DIRECTIONS.length));
+}
+function uiPrompt({ context, direction, mode }) { const [slug, vibe] = direction; const lead = mode === "upgrade" ? "You are editing the attached screenshot into a much stronger production UI reference. Preserve visible copy, brand name, nav semantics, CTA meaning, and information architecture; radically improve composition, type, imagery, palette, spacing, components, and visual system." : "You are designing a new interface from scratch from the brief below. Create a complete, credible desktop UI mockup that can be implemented as a real web product, landing page, dashboard, or app surface."; return `${lead}\n\nBRIEF / CONTEXT:\n${context || "No extra context provided."}\n\nDIRECTION: ${slug}\n${vibe}\n\nBefore drawing, silently do the fal-redesign-style brand analysis: identify the buyer, emotional register, primary visual carrier, palette, typography, and layout rhythm that this specific product deserves. Make a concrete art-direction choice based on the product: product image, photography, illustration/character, typography, diagram/information graphic, or graphic system. Do not default to generic SaaS cards, blue CTAs, emoji decoration, Inter-only typography, or bland dashboard chrome. Preserve visible copy for redesigns. The output should look like a high-end interface screenshot, not an abstract poster.\n\nRender as a tall desktop web UI screenshot, 1440–1920px wide and up to 2880px tall, front-on, no browser chrome, no device frame, no watermark, readable text, no broken glyphs, no duplicated words.`; }
+const SPEC_PROMPT = `You are a senior design engineer. The attached image is the approved target UI design. Write an implementation build spec for Pi to reproduce it in real code.
+
+Output TWO parts and nothing else. Do not print the labels "PART A" or "PART B". Your response is invalid unless it ends with a parseable fenced JSON block.
+
+First, Markdown with exactly these sections:
+# Design spec
+## Hard constraints (MUST follow literally)
+Short non-negotiable bullets with numeric values where visible: type clamps, max widths, line breaks, grid columns/gaps, button sizes/radii, section spacing, image aspect ratios.
+## Summary
+1-2 sentences on the personality of the design.
+## Canvas & palette
+Backgrounds, surfaces, text colors, accents, borders, gradients. Use hex-like values.
+## Typography
+Display/body/mono family feel, weights, casing, tracking, line-height, approximate sizes.
+## Layout & sections
+Walk top-to-bottom through nav, hero, body sections, footer. Mention exact readable copy strings, grid/columns, alignment, visual anchors.
+## Components & micro-details
+Buttons, chips, badges, cards, dividers, captions, icons, hover-looking states, shadows/textures.
+## Implementation notes
+Concrete CSS/Tailwind hints and responsive behavior.
+
+Second, one fenced JSON block containing design tokens. Use \`\`\`json fences. Even if the image is sparse, emit the fields you can determine. Omit unknown fields; do not invent values. Shape:
+{
+  "canvas": { "background": "#hex" },
+  "colors": { "text": "#hex", "textMuted": "#hex", "accent": "#hex", "line": "#hex" },
+  "typography": { "display": { "family": "...", "weight": 700, "trackingEm": -0.02, "lineHeight": 0.95, "sizeClamp": "clamp(...)" }, "body": { "family": "...", "sizePx": 16, "lineHeight": 1.5 } },
+  "layout": { "containerMaxWidthPx": 1440, "gridColumns": 12, "sectionPaddingYpx": 96 },
+  "components": { "primaryButton": { "heightPx": 56, "radiusPx": 999, "fill": "#hex" } }
+}
+
+Be concise, numeric, and specific. No preamble.`;
+const DELTA_PROMPT = `IMAGE 1 is the CURRENT implementation. IMAGE 2 is the approved TARGET reference. Write only a surgical residual delta spec.
+
+Rules:
+- Do not re-describe the whole design; skip anything that already matches.
+- Prioritize type scale/line breaks, section density/max-widths, colors, component details, casing, image placement.
+- Be quantitative: exact-ish px/ch/clamp values, grid counts, gaps, radii, colors.
+- Output Markdown only under a single # Delta spec heading with 10-30 bullets. No compliments or trailing notes.`;
 function buildGallery(outDir, results, beforePath, kind) { const cards = results.map((r) => r.ok ? `<a class="card" href="./${path.basename(r.finalPath)}" target="_blank"><img src="./${path.basename(r.finalPath)}"><h2>${r.id}</h2><p>${r.metadata?.revisedPrompt?.slice(0,220) || ""}</p></a>` : `<article class="card fail"><h2>${r.id}</h2><pre>${r.error}</pre></article>`).join("\n"); const before = beforePath ? `<section class="before"><img src="./${path.basename(beforePath)}"><span>before</span></section>` : ""; const html = `<!doctype html><meta charset="utf-8"><title>codex-ui-design ${kind}</title><style>body{margin:0;background:#090909;color:#f4f1ea;font-family:ui-sans-serif,system-ui;padding:32px}h1{font-size:48px;letter-spacing:-.04em;margin:0 0 12px}.before{display:flex;gap:16px;align-items:center;margin:24px 0}.before img{width:280px;border:1px solid #333;border-radius:10px}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:18px}.card{display:block;color:inherit;text-decoration:none;background:#121212;border:1px solid #262626;border-radius:18px;overflow:hidden}.card img{width:100%;aspect-ratio:1/1.35;object-fit:cover;display:block}.card h2{font-size:18px;margin:14px 16px 6px}.card p,.card pre{color:#aaa;font-size:12px;margin:0 16px 16px;white-space:pre-wrap}.fail{padding:16px;border-color:#633}</style><h1>codex-ui-design ${kind}</h1><p>Pick a reference image, then run describe.sh on it.</p>${before}<main class="grid">${cards}</main>`; const p = path.join(outDir, "gallery.html"); writeFileSync(p, html); return p; }
-async function textWithImages(prompt, images, opts, outFile) { return withServer(opts, async (rpc) => { const run = await runTurn(rpc, { id: "text", prompt, images, imagegen: false }, opts); const txt = run.messages.join("\n\n").trim() || "# No output\n"; await fs.writeFile(outFile, `${txt}\n`); return outFile; }); }
+function bestMessage(messages) { return messages.map((m) => String(m || "").trim()).filter(Boolean).sort((a, b) => b.length - a.length)[0] || ""; }
+async function runTextWithImages(prompt, images, opts) { return withServer(opts, async (rpc) => { const run = await runTurn(rpc, { id: "text", prompt, images, imagegen: false }, opts); return bestMessage(run.messages) || "# No output\n"; }); }
+async function textWithImages(prompt, images, opts, outFile) { const txt = await runTextWithImages(prompt, images, opts); await fs.writeFile(outFile, `${txt.trim()}\n`); return outFile; }
+function splitMarkdownAndTokens(text) {
+  const m = text.match(/([\s\S]*?)```(?:json)?\s*([\s\S]*?)```\s*$/i);
+  if (!m) return { markdown: text.trim(), tokens: null };
+  const markdown = m[1].trim();
+  let tokens = null;
+  try { tokens = JSON.parse(m[2].trim()); }
+  catch {
+    const raw = m[2]; const a = raw.indexOf("{"); const b = raw.lastIndexOf("}");
+    if (a !== -1 && b > a) { try { tokens = JSON.parse(raw.slice(a, b + 1)); } catch {} }
+  }
+  return { markdown, tokens };
+}
+async function specWithImages(images, opts, outDir = opts.outDir) {
+  const txt = await runTextWithImages(SPEC_PROMPT, images, opts);
+  const { markdown, tokens } = splitMarkdownAndTokens(txt);
+  const specPath = path.join(outDir, "spec.md");
+  const tokensPath = path.join(outDir, "tokens.json");
+  await fs.writeFile(specPath, `${(markdown || txt).trim()}\n`);
+  if (tokens) await fs.writeFile(tokensPath, `${JSON.stringify(tokens, null, 2)}\n`);
+  return { specPath, tokensPath: tokens ? tokensPath : null };
+}
+async function readStdin() { return await new Promise((resolve) => { let buf = ""; process.stdin.setEncoding("utf8"); process.stdin.on("data", c => { buf += c; }); process.stdin.on("end", () => resolve(buf)); }); }
+async function contextFromArgs(args, { positional = true, stdin = false } = {}) {
+  const parts = [];
+  if (args["context-file"]) parts.push(await fs.readFile(path.resolve(String(args["context-file"])), "utf8"));
+  for (const c of toArray(args.context)) if (String(c).trim()) parts.push(String(c));
+  if (positional && args._?.length) parts.push(args._.join(" "));
+  if (stdin && !parts.length && !process.stdin.isTTY) { const s = await readStdin(); if (s.trim()) parts.push(s); }
+  return parts.join("\n\n").trim();
+}
 
 async function loadPromptJobs(args, opts) {
   const entries = [];
@@ -190,14 +347,70 @@ async function loadPromptJobs(args, opts) {
 
 async function main() {
   const [cmd, ...rest] = process.argv.slice(2); const args = parseArgs(rest); if (!cmd || cmd === "--help" || args.help) { console.log(usage()); return; }
-  const outDir = abs(args.out || args["out-dir"] || DEFAULT_OUT); const opts = { cwd: path.resolve(args.cwd || process.cwd()), outDir, logsDir: path.resolve(args["logs-dir"] || path.join(outDir, "logs")), model: args.model === "default" ? null : (args.model || DEFAULT_MODEL), skillPath: args["skill-path"] === "none" ? null : (args["skill-path"] || DEFAULT_SKILL_PATH), concurrency: asInt(args.concurrency, 4), serverTimeoutMs: asInt(args["server-timeout-ms"], 30_000), rpcTimeoutMs: asInt(args["rpc-timeout-ms"], 120_000), turnTimeoutMs: asInt(args["turn-timeout-ms"], 300_000) };
-  await fs.mkdir(outDir, { recursive: true });
+  const screenshotMode = cmd === "screenshot";
+  const noOutDir = screenshotMode || (cmd === "generate" && args["list-directions"]);
+  const outDir = screenshotMode ? abs(args["out-dir"] || DEFAULT_OUT) : abs(args.out || args["out-dir"] || DEFAULT_OUT);
+  const opts = { cwd: path.resolve(args.cwd || process.cwd()), outDir, logsDir: path.resolve(args["logs-dir"] || path.join(outDir, "logs")), model: args.model === "default" ? null : (args.model || DEFAULT_MODEL), skillPath: args["skill-path"] === "none" ? null : (args["skill-path"] || DEFAULT_SKILL_PATH), concurrency: asInt(args.concurrency, 4), serverTimeoutMs: asInt(args["server-timeout-ms"], 30_000), rpcTimeoutMs: asInt(args["rpc-timeout-ms"], 120_000), turnTimeoutMs: asInt(args["turn-timeout-ms"], 300_000) };
+  if (!noOutDir) await fs.mkdir(outDir, { recursive: true });
   if (cmd === "probe") return withServer(opts, async (rpc, server, state) => { const run = await runTurn(rpc, { id: "probe", prompt: "Reply exactly: OK", imagegen: false }, opts); console.log(JSON.stringify({ ok: true, model: opts.model, authMethod: state.auth?.authMethod, accountType: state.account?.type || null, planType: state.account?.planType || null, serverUrl: server.url, logPath: server.logPath, threadId: run.threadId, turnStatus: run.turnStatus, messageText: run.messages.join("\n") }, null, 2)); });
   if (cmd === "imagegen") { const jobs = await loadPromptJobs(args, opts); const { summaryPath } = await runImageJobs(jobs, opts); console.log(summaryPath); if (JSON.parse(readFileSync(summaryPath, "utf8")).failed) process.exitCode = 1; return; }
-  if (cmd === "generate") { const context = args.context || args._.join(" "); if (!context.trim()) throw new Error("generate requires --context"); const dirs = pickDirections(asInt(args.variants, 1)); const jobs = dirs.map((d, i) => ({ id: `mockup-${String(i+1).padStart(2,"0")}-${d[0]}`, prompt: uiPrompt({ context, direction: d, mode: "generate" }) })); const { summary } = await runImageJobs(jobs, opts); const gallery = buildGallery(outDir, summary.results, null, "generate"); if (summary.results.length === 1 && summary.results[0].ok) await textWithImages(SPEC_PROMPT, [summary.results[0].finalPath], opts, path.join(outDir, "spec.md")); console.log(`# codex-ui-design generate\n\nGallery: ${gallery}\nSummary: ${path.join(outDir, "summary.json")}`); return; }
-  if (cmd === "upgrade") { const target = args.target || args._[0]; if (!target) throw new Error("upgrade requires --target"); if (!/^https?:/.test(target) && !existsSync(target)) throw new Error(`target not found: ${target}`); const before = path.join(outDir, "before.png"); console.error(`[codex-ui-design] screenshot ${target} -> ${before}`); await screenshot(target, before); const dirs = pickDirections(asInt(args.variants, 1)); const jobs = dirs.map((d, i) => ({ id: dirs.length === 1 ? "after" : `after-${String(i+1).padStart(2,"0")}-${d[0]}`, prompt: uiPrompt({ context: args.context || "", direction: d, mode: "upgrade" }), images: [before] })); const { summary } = await runImageJobs(jobs, opts); const gallery = buildGallery(outDir, summary.results, before, "upgrade"); if (summary.results.length === 1 && summary.results[0].ok) await textWithImages(SPEC_PROMPT, [summary.results[0].finalPath], opts, path.join(outDir, "spec.md")); console.log(`# codex-ui-design upgrade\n\nBefore: ${before}\nGallery: ${gallery}\nSummary: ${path.join(outDir, "summary.json")}`); return; }
-  if (cmd === "describe") { const img = args.image || args.after || args._[0]; if (!img || !existsSync(img)) throw new Error("describe requires --image <png>"); const p = await textWithImages(SPEC_PROMPT, [img], opts, path.join(outDir, "spec.md")); console.log(`# codex-ui-design describe\n\nSpec: ${p}`); return; }
-  if (cmd === "iterate") { const target = args.target || args._[0]; if (!target) throw new Error("iterate requires --target"); if (!args.reference || !existsSync(args.reference)) throw new Error("iterate requires --reference <png>"); const current = path.join(outDir, "current.png"); await screenshot(target, current); const p = await textWithImages("IMAGE 1 is current implementation. IMAGE 2 is approved reference. Write only a surgical Markdown delta spec of residual fixes: type scale, line breaks, density, max-widths, colors, components, casing, image placement. Numeric where possible.", [current, args.reference], opts, path.join(outDir, "delta.md")); console.log(`# codex-ui-design iterate\n\nCurrent: ${current}\nDelta: ${p}`); return; }
+  if (cmd === "screenshot") {
+    const target = args.target || args._[0];
+    const outPath = args.image || args.out;
+    if (!target || !outPath) throw new Error("screenshot requires --target <file-or-url> --out <png>");
+    if (!/^https?:/.test(target) && !existsSync(target)) throw new Error(`target not found: ${target}`);
+    const p = path.resolve(String(outPath));
+    await screenshot(target, p, { width: asInt(args.width, 1920), height: asInt(args.height, 2880), fullPage: Boolean(args["full-page"]) });
+    console.log(p);
+    return;
+  }
+  if (cmd === "generate") {
+    if (args["list-directions"]) { printDirections(); return; }
+    const context = await contextFromArgs(args, { positional: true, stdin: true });
+    if (!context.trim()) throw new Error("generate requires --context, --context-file, positional text, or stdin");
+    const dirs = pickDirections(asInt(args.variants, 1), args.direction);
+    const jobs = dirs.map((d, i) => ({ id: `mockup-${String(i+1).padStart(2,"0")}-${d[0]}`, prompt: uiPrompt({ context, direction: d, mode: "generate" }) }));
+    const { summary } = await runImageJobs(jobs, opts);
+    const gallery = buildGallery(outDir, summary.results, null, "generate");
+    let spec = null;
+    if (summary.results.length === 1 && summary.results[0].ok) spec = await specWithImages([summary.results[0].finalPath], opts);
+    console.log(`# codex-ui-design generate\n\nGallery: ${gallery}\nSummary: ${path.join(outDir, "summary.json")}${spec ? `\nSpec: ${spec.specPath}${spec.tokensPath ? `\nTokens: ${spec.tokensPath}` : ""}` : ""}`);
+    return;
+  }
+  if (cmd === "upgrade") {
+    const target = args.target || args._[0];
+    if (!target) throw new Error("upgrade requires --target");
+    if (!/^https?:/.test(target) && !existsSync(target)) throw new Error(`target not found: ${target}`);
+    const context = await contextFromArgs(args, { positional: false });
+    const before = path.join(outDir, "before.png");
+    console.error(`[codex-ui-design] screenshot ${target} -> ${before}`);
+    await screenshot(target, before);
+    const dirs = pickDirections(asInt(args.variants, 1), args.direction);
+    const jobs = dirs.map((d, i) => ({ id: dirs.length === 1 ? "after" : `after-${String(i+1).padStart(2,"0")}-${d[0]}`, prompt: uiPrompt({ context, direction: d, mode: "upgrade" }), images: [before] }));
+    const { summary } = await runImageJobs(jobs, opts);
+    const gallery = buildGallery(outDir, summary.results, before, "upgrade");
+    let spec = null;
+    if (summary.results.length === 1 && summary.results[0].ok) spec = await specWithImages([summary.results[0].finalPath], opts);
+    console.log(`# codex-ui-design upgrade\n\nBefore: ${before}\nGallery: ${gallery}\nSummary: ${path.join(outDir, "summary.json")}${spec ? `\nSpec: ${spec.specPath}${spec.tokensPath ? `\nTokens: ${spec.tokensPath}` : ""}` : ""}`);
+    return;
+  }
+  if (cmd === "describe") {
+    const img = args.image || args.after || args._[0];
+    if (!img || !existsSync(img)) throw new Error("describe requires --image <png>");
+    const spec = await specWithImages([img], opts);
+    console.log(`# codex-ui-design describe\n\nSpec: ${spec.specPath}${spec.tokensPath ? `\nTokens: ${spec.tokensPath}` : ""}`);
+    return;
+  }
+  if (cmd === "iterate") {
+    const target = args.target || args._[0];
+    if (!target) throw new Error("iterate requires --target");
+    if (!args.reference || !existsSync(args.reference)) throw new Error("iterate requires --reference <png>");
+    const current = path.join(outDir, "current.png");
+    await screenshot(target, current);
+    const p = await textWithImages(DELTA_PROMPT, [current, args.reference], opts, path.join(outDir, "delta.md"));
+    console.log(`# codex-ui-design iterate\n\nCurrent: ${current}\nDelta: ${p}`);
+    return;
+  }
   throw new Error(`unknown command: ${cmd}`);
 }
 main().catch((e) => { console.error(e.stack || e.message); process.exit(1); });

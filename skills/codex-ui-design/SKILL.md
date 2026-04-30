@@ -50,6 +50,7 @@ Do not use for:
 - For screenshotting file/URL targets, the runtime installs `puppeteer` on first run.
 - Raw app-server logs are written under `<out>/logs/`.
 - Every image run writes `<id>.json` metadata plus `summary.json` with thread/turn IDs, source path, revised prompt, warnings, and final image path.
+- `describe` and single-variant `generate` / `upgrade` write both `spec.md` and, when the model emits parseable tokens, `tokens.json`.
 
 ## Pi TUI gallery
 
@@ -101,6 +102,8 @@ Outputs:
 
 ```bash
 bash scripts/generate.sh --context "brief here" --variants 4 --out .codex-ui-design
+bash scripts/generate.sh --context-file brief.md --direction swiss-editorial --out .codex-ui-design
+bash scripts/generate.sh --list-directions
 ```
 
 Outputs:
@@ -108,7 +111,9 @@ Outputs:
 - `<id>.json` metadata for each image.
 - `summary.json`.
 - `gallery.html` when multiple variants are generated.
-- `spec.md` for single-variant runs.
+- `spec.md` and usually `tokens.json` for single-variant runs.
+
+Use `--direction <slug>` or `CODEX_UI_DIRECTION=<slug>` to force one direction. Pass comma-separated slugs or repeat `--direction` to force a small set.
 
 Use this for new interfaces from scratch. It is not only a redesign tool.
 
@@ -116,7 +121,7 @@ Use this for new interfaces from scratch. It is not only a redesign tool.
 
 ```bash
 bash scripts/upgrade.sh --target ./index.html --context "brand/product notes" --variants 4 --out .codex-ui-design
-bash scripts/upgrade.sh --target http://localhost:3000 --variants 4 --out .codex-ui-design
+bash scripts/upgrade.sh --target http://localhost:3000 --context-file brand-notes.md --direction brutalist-mono --out .codex-ui-design
 ```
 
 Outputs:
@@ -125,7 +130,7 @@ Outputs:
 - `<id>.json` metadata for each image.
 - `summary.json`.
 - `gallery.html` for variants
-- `spec.md` for single-variant runs
+- `spec.md` and usually `tokens.json` for single-variant runs
 
 ### Describe chosen image → implementation spec
 
@@ -135,6 +140,17 @@ bash scripts/describe.sh --image .codex-ui-design/mockup-02-swiss-editorial.png 
 
 Outputs:
 - `spec.md` — build spec with hard constraints.
+- `tokens.json` — parseable design tokens when the model provides the fenced JSON block.
+
+### Screenshot utility
+
+```bash
+bash scripts/screenshot.sh --target http://localhost:3000 --out .codex-ui-design/current.png
+bash scripts/screenshot.sh --target ./index.html --out .codex-ui-design/full.png --full-page --width 1440 --height 1800
+```
+
+Outputs:
+- The requested PNG screenshot. Useful for debugging targets before an upgrade run.
 
 ### Iterate after implementation
 
@@ -151,8 +167,8 @@ Outputs:
 1. If the user asks to design a UI from scratch and visual quality matters, run `generate` before coding.
 2. If the user asks to redesign/improve an existing UI, run `upgrade` before coding.
 3. If multiple variants are generated, show/open the gallery or read the strongest images and ask/pick a direction.
-4. Run `describe` on the chosen image if the generated run did not already produce `spec.md`.
-5. Implement with `frontend-stack` / `frontend-skill` / `emil-design-eng` / `make-interfaces-feel-better` as appropriate.
+4. Run `describe` on the chosen image if the generated run did not already produce `spec.md` / `tokens.json`.
+5. Implement with `frontend-stack` / `frontend-skill` / `emil-design-eng` / `make-interfaces-feel-better` as appropriate. Treat the target image as the primary spec, `spec.md` as constraints, and `tokens.json` as reusable numeric/style values.
 6. After implementation, use the `expect` browser-facing verification skill and optionally run `iterate` for a delta spec.
 
 ## Concurrency guidance
