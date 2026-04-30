@@ -10,6 +10,8 @@ Included by default:
 - **`pi-session-notebook`** — structured per-session continuity notebook
 - **`pi-magic-docs`** — living architecture docs with autonomous maintenance
 - **`codex-ui-gallery`** — high-quality native Pi gallery for Codex UI image outputs
+- **`duel-deck`** — parallel UI generation/model×skill comparison viewer
+- **`finder-model-default`** — default model routing for the Finder tool when env is unset
 - **`frontend-stack`** — local frontend/design skill router
 - **`codex-ui-design`** — image-first UI design workflow via Codex app-server
 
@@ -101,6 +103,12 @@ Commands/tool:
 - `/codex-gallery-clear`
 - tool: `show_codex_ui_gallery`
 
+### `duel-deck`
+Runs the same UI task through multiple model×skill combinations and presents generated HTML options in a comparison deck.
+
+### `finder-model-default`
+Sets a preferred `PI_FINDER_MODELS` fallback when the shell environment has not specified one.
+
 ### `frontend-stack`
 A small routing skill for choosing the right local frontend/design skill mix without loading every overlapping UI skill at once.
 
@@ -184,6 +192,8 @@ pi-extension-pack/
     pi-session-notebook/
     pi-magic-docs/
     codex-ui-gallery/
+    duel-deck/
+    finder-model-default.ts
   skills/
     frontend-stack/
     codex-ui-design/

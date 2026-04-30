@@ -1,0 +1,9 @@
+{
+  "name": "pi-duel-deck",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Run the same UI task through multiple model×skill combos and present results in a design deck",
+  "pi": {
+    "extensions": ["./index.ts"]
+  }
+}

@@ -12,6 +12,11 @@ const ownedExtensions = [
     from: path.join(home, ".pi", "agent", "extensions", "codex-ui-gallery"),
     to: path.join(repo, "extensions", "codex-ui-gallery"),
   },
+  {
+    name: "duel-deck",
+    from: path.join(home, ".pi", "agent", "extensions", "duel-deck"),
+    to: path.join(repo, "extensions", "duel-deck"),
+  },
 ];
 
 const ownedSkills = [
@@ -50,6 +55,12 @@ function copyDir(src, dst) {
 for (const item of [...ownedExtensions, ...ownedSkills]) {
   copyDir(item.from, item.to);
   console.log(`synced ${item.name}: ${item.from} -> ${path.relative(repo, item.to)}`);
+}
+
+const finderDefaultSource = path.join(home, ".pi", "agent", "extensions", "finder-model-default.ts");
+if (fs.existsSync(finderDefaultSource)) {
+  fs.copyFileSync(finderDefaultSource, path.join(repo, "extensions", "finder-model-default.ts"));
+  console.log("synced finder-model-default.ts");
 }
 
 for (const dir of ["prompts", "themes"]){

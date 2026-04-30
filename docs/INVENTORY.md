@@ -1,19 +1,21 @@
 # Local Pi package inventory
 
-Generated: 2026-04-30T14:54:05.403Z
+Generated: 2026-04-30T15:07:21.656Z
 
 > This report intentionally lists paths and names only. It does not read or print auth/config contents.
 
 ## Package repo resources
 
 - repo: `/Users/gfw/code/pi-extension-pack`
-- default extensions: 6
+- default extensions: 8
 - extras: 4
 - packaged skills: 2
 
 ### Packaged default extensions
 - bash-fixer
 - codex-ui-gallery
+- duel-deck
+- finder-model-default.ts
 - pi-magic-docs
 - pi-memory-system
 - pi-session-notebook
@@ -25,11 +27,11 @@ Generated: 2026-04-30T14:54:05.403Z
 
 ## Active local extensions not yet packaged
 
-- duel-deck
+- none
 
 ### Active root-level extension/config files
 - cloudflare-codemode.json (config; do not commit raw if secret-bearing)
-- finder-model-default.ts
+- finder-model-default.ts (packaged)
 
 ## Disabled local extensions
 

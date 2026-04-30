@@ -48,7 +48,11 @@ function skillNames(root) {
 }
 
 function packageResourceNames(kind) {
-  return listDirs(path.join(repo, kind));
+  const dir = path.join(repo, kind);
+  const dirs = listDirs(dir);
+  if (kind !== "extensions") return dirs;
+  const files = listFiles(dir).filter((name) => /\.(ts|js)$/.test(name));
+  return [...dirs, ...files].sort();
 }
 
 function relSkillTarget(name) {
@@ -114,7 +118,10 @@ lines.push(mdList(repoMissingActiveExtensions));
 lines.push("");
 if (activeExtensionFiles.length) {
   lines.push("### Active root-level extension/config files");
-  lines.push(mdList(activeExtensionFiles.map((name) => name.endsWith(".json") ? `${name} (config; do not commit raw if secret-bearing)` : name)));
+  lines.push(mdList(activeExtensionFiles.map((name) => {
+    if (name.endsWith(".json")) return `${name} (config; do not commit raw if secret-bearing)`;
+    return repoExtensions.includes(name) ? `${name} (packaged)` : `${name} (not packaged)`;
+  })));
   lines.push("");
 }
 if (disabledExtensions.length) {
