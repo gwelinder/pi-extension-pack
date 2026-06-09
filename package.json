@@ -7,22 +7,31 @@
     "pi-package",
     "pi",
     "pi-extension",
-    "magic-docs",
     "memory",
-    "session-notebook",
     "codex-ui-design",
-    "frontend-stack"
+    "frontend-stack",
+    "exa",
+    "web-search",
+    "rich-fetch",
+    "codegraph",
+    "semantic-code-search",
+    "github",
+    "pdf",
+    "youtube",
+    "gemini"
   ],
   "scripts": {
     "audit": "node scripts/audit-local.mjs",
     "check:secrets": "node scripts/check-no-secrets.mjs",
     "sync:owned": "node scripts/sync-owned-resources.mjs"
   },
+  "dependencies": {
+    "@colbymchenry/codegraph": "0.9.7"
+  },
   "peerDependencies": {
-    "@mariozechner/pi-ai": "*",
-    "@mariozechner/pi-coding-agent": "*",
-    "@mariozechner/pi-tui": "*",
-    "@sinclair/typebox": "*",
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*",
     "typebox": "*"
   },
   "repository": {

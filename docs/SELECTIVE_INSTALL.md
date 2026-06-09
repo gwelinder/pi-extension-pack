@@ -29,18 +29,82 @@ Pi supports package filters in `settings.json`, so users can load only selected 
 }
 ```
 
-### Memory/notebook/Magic Docs only
+### Memory only
 
 ```json
 {
   "packages": [
     {
       "source": "git:github.com/gwelinder/pi-extension-pack",
-      "extensions": [
-        "extensions/pi-memory-system/**",
-        "extensions/pi-session-notebook/**",
-        "extensions/pi-magic-docs/**"
-      ],
+      "extensions": ["extensions/pi-memory-system/**"],
+      "skills": [],
+      "prompts": [],
+      "themes": []
+    }
+  ]
+}
+```
+
+### Retired archives
+
+Retired extensions are sunset and no longer part of package defaults. If you explicitly need to test one, load its archived path under `extras/retired/`.
+
+```json
+{
+  "packages": [
+    {
+      "source": "git:github.com/gwelinder/pi-extension-pack",
+      "extensions": ["extras/retired/pi-magic-docs/**"],
+      "skills": [],
+      "prompts": [],
+      "themes": []
+    }
+  ]
+}
+```
+
+### Compact Exa search only
+
+```json
+{
+  "packages": [
+    {
+      "source": "git:github.com/gwelinder/pi-extension-pack",
+      "extensions": ["extensions/exa/**"],
+      "skills": [],
+      "prompts": [],
+      "themes": []
+    }
+  ]
+}
+```
+
+### Rich content fetch only
+
+```json
+{
+  "packages": [
+    {
+      "source": "git:github.com/gwelinder/pi-extension-pack",
+      "extensions": ["extensions/rich-fetch/**"],
+      "skills": [],
+      "prompts": [],
+      "themes": []
+    }
+  ]
+}
+```
+
+### CodeGraph only
+
+Use this when you only want the Pi-native `codegraph` tool. The package installs `@colbymchenry/codegraph`; initialize each repo with `codegraph init -i` or ask Pi to run the tool's `init` action.
+
+```json
+{
+  "packages": [
+    {
+      "source": "git:github.com/gwelinder/pi-extension-pack",
+      "extensions": ["extensions/codegraph/**"],
       "skills": [],
       "prompts": [],
       "themes": []

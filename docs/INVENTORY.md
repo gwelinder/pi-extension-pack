@@ -7,19 +7,24 @@ Generated: 2026-04-30T15:08:52.621Z
 ## Package repo resources
 
 - repo: `/Users/gfw/code/pi-extension-pack`
-- default extensions: 8
-- extras: 5
+- default extensions: 9
+- extras: 5 plus retired archive
 - packaged skills: 2
 
 ### Packaged default extensions
 - bash-fixer
+- codegraph
 - codex-ui-gallery
 - duel-deck
+- exa
 - finder-model-default.ts
-- pi-magic-docs
 - pi-memory-system
-- pi-session-notebook
+- rich-fetch
 - tool-fixer
+
+### Retired / archived extras
+- retired/pi-magic-docs (sunset: many tracked reads, essentially no successful maintenance edits)
+- retired/pi-session-notebook (sunset: overlaps with native Pi sessions and memory recall; prompt tax not justified)
 
 ### Packaged skills
 - codex-ui-design

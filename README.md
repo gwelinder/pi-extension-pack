@@ -6,9 +6,10 @@ Included by default:
 
 - **`bash-fixer`** — conservative bash mistake repair before execution
 - **`tool-fixer`** — better `read` / `edit` recovery and diagnostics
+- **`exa`** — compact Exa search / URL-content tool with highlights-first defaults
+- **`rich-fetch`** — compact rich URL/media extractor for GitHub, PDFs, YouTube/video, and Gemini URL-context fallback
+- **`codegraph`** — Pi-native wrapper for local semantic code indexes, callers/callees, impact, and affected tests
 - **`pi-memory-system`** — Claude-style persistent markdown memory
-- **`pi-session-notebook`** — structured per-session continuity notebook
-- **`pi-magic-docs`** — living architecture docs with autonomous maintenance
 - **`codex-ui-gallery`** — high-quality native Pi gallery for Codex UI image outputs
 - **`duel-deck`** — parallel UI generation/model×skill comparison viewer
 - **`finder-model-default`** — default model routing for the Finder tool when env is unset
@@ -26,9 +27,8 @@ The package focuses on four things:
 
 1. **fix common model/tooling mistakes at the runtime layer**
 2. **store durable context in readable markdown files**
-3. **preserve session continuity across long runs and compaction**
-4. **keep architecture docs alive with low-friction maintenance**
-5. **recover owned Pi UI/design workflows from GitHub without depending on this MacBook**
+3. **preserve durable context across long runs and compaction**
+4. **recover owned Pi UI/design workflows from GitHub without depending on this MacBook**
 
 ## Included by default
 
@@ -48,6 +48,30 @@ Wraps Pi's built-in `read` and `edit` tools to improve failure recovery:
 - non-unique edit match locations
 - memory-file freshness notes
 
+### `exa`
+Compact Exa integration for Pi:
+- one model-callable `exa` tool for web search, code/docs search, and URL content fetches
+- defaults to Exa `/search` with `type: "auto"` and `contents.highlights: true`
+- uses `/contents` when `urls` are provided
+- supports `kind: "code"`, domain filters, freshness, text caps, and Exa `outputSchema`
+- stores full raw JSON under `~/.pi/agent/exa-results/` so no separate `get_search_content` tool is needed
+
+### `rich-fetch`
+Compact content extractor for cases where search is not enough:
+- GitHub repo/file extraction via clone/API fallback
+- PDF text extraction via `pdftotext`
+- YouTube and local-video analysis via Gemini, with optional frame extraction via `yt-dlp`/`ffmpeg`
+- Gemini URL-context fallback for JS-rendered/blocked pages
+- stores full artifacts under `~/.pi/agent/rich-fetch-results/`
+
+### `codegraph`
+Pi-native CodeGraph wrapper for local semantic code intelligence:
+- registers one `codegraph` tool with `context`, `search`, `files`, `callers`, `callees`, `impact`, `affected`, `status`, `sync`, `init`, and `index` actions
+- auto-syncs the local `.codegraph/` index before query actions
+- resolves the CLI from `PI_CODEGRAPH_BIN`, the bundled `@colbymchenry/codegraph` dependency, local `node_modules/.bin`, or `PATH`
+- archives very large outputs under `~/.pi/agent/artifacts/codegraph/`
+- use `codegraph init -i` or the tool's `init` action to enable a new repo
+
 ### `pi-memory-system`
 Adds Claude-style durable markdown memory under `~/.pi/agent/memory/`:
 - typed memories: `user`, `feedback`, `project`, `reference`
@@ -61,35 +85,6 @@ Commands:
 - `/remember`
 - `/forget`
 - `/memory-status`
-
-### `pi-session-notebook`
-Creates a per-session notebook under `~/.pi/agent/session-notebooks/` and injects it into the prompt:
-- session title
-- current state
-- task specification
-- files and functions
-- workflow
-- errors and corrections
-- learnings
-- key results
-- worklog
-
-Command:
-- `/notebook-status`
-
-### `pi-magic-docs`
-Tracks markdown files whose first line is `# MAGIC DOC: ...` and treats them as living architecture / overview docs:
-- tracks docs on read, edit, and write
-- persists tracked docs in session state
-- manual update command
-- autonomous maintenance after idle assistant runs
-- cooldown-gated auto-queueing
-- tight scoped edit guard during update mode
-- `/magic-docs-status` now includes maintenance counters for queued updates, edits, and no-op passes
-
-Commands:
-- `/magic-docs-status`
-- `/magic-docs-update [path]`
 
 ### `codex-ui-gallery`
 High-quality native Pi TUI image gallery for `codex-ui-design` outputs:
@@ -145,16 +140,20 @@ Experimental gated skill discovery in `extras/skill-router/`:
 - intentionally not enabled by default until longer-term usage proves the policy stable
 
 ### `skill-update-checker`
-Generic watched-source update checker in `extras/skill-update-checker/`:
-- inspired by PSPDFKit's `pi-skills-update-checker`
-- built for external skill sources that change upstream more often than your local copies
-- checks configured watched git sources daily on session start
-- keeps pending update reminders until the local source catches up
-- exposes `/skill-updates-status` and `/skill-updates-check`
-- requires a real local git checkout for each watched source; copied skill folders alone are not enough
+Safe external skill updater in `extras/skill-update-checker/`:
+- report-first replacement for unsafe `npx skills update` flows
+- reads `~/.agents/.skill-lock.json` and compares recorded upstream base vs local skill dir vs latest upstream
+- preserves local-only files and local-only edits
+- stops on local/upstream conflicts with review artifacts
+- applies only explicit `--clean-only` or `--include-mergeable` plans, with backups and restore
+- exposes `/skill-updates-status`, `/skill-updates-scan`, `/skill-updates-diff`, `/skill-updates-apply`, and `/skill-updates-restore`
 
-### `claude-inspired-coach`
-A lightweight prompt coach kept as reference only. It is not enabled by default because the concrete runtime/tooling extensions are the main value here.
+### `operating-principles`
+A lightweight prompt coach for always-on Pi working style and Gustav's core operating principles. Kept as an opt-in extra because it intentionally changes the system prompt.
+
+### Retired extensions
+- `retired/pi-magic-docs` — sunset Magic Docs extension. Session evidence showed many tracked reads but essentially no successful maintenance edits, so the always-on prompt burden was not justified.
+- `retired/pi-session-notebook` — old automatic per-session notebook. Removed from defaults because it adds prompt weight and overlaps with Pi's native sessions plus `pi-memory-system` durable recall.
 
 ## Install
 
@@ -211,9 +210,10 @@ pi-extension-pack/
   extensions/
     bash-fixer/
     tool-fixer/
+    exa/
+    rich-fetch/
+    codegraph/
     pi-memory-system/
-    pi-session-notebook/
-    pi-magic-docs/
     codex-ui-gallery/
     duel-deck/
     finder-model-default.ts
@@ -227,7 +227,9 @@ pi-extension-pack/
     skill-router/
     skill-update-checker/
     local-skill-snapshots/
-    claude-inspired-coach/
+    operating-principles/
+    retired/pi-magic-docs/
+    retired/pi-session-notebook/
   docs/
     BOOTSTRAP.md
     INVENTORY.md
