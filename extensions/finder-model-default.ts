@@ -1,4 +1,4 @@
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 const DEFAULT_FINDER_MODELS =
   "openai-codex/gpt-5.3-codex-spark:high,openai-codex/gpt-5.4:xhigh";

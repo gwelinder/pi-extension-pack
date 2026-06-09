@@ -1,4 +1,4 @@
-import type { ExtensionAPI, ExtensionCommandContext } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { basename, dirname, join, resolve, sep } from "node:path";
 import {
   existsSync,
@@ -1029,6 +1029,7 @@ export default function piMemorySystem(pi: ExtensionAPI) {
   });
 
   pi.on("input", (event, ctx) => {
+    if (event.streamingBehavior === "steer") return;
     const sessionId = ctx.sessionManager.getSessionId();
     const state = getState(sessionId);
     const text = event.text || "";

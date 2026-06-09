@@ -1,6 +1,6 @@
-import { Type } from "@mariozechner/pi-ai";
-import { defineTool, type ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { Text } from "@mariozechner/pi-tui";
+import { Type } from "typebox";
+import { defineTool, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { Text } from "@earendil-works/pi-tui";
 import * as fs from "node:fs";
 import { homedir } from "node:os";
 import * as path from "node:path";
@@ -531,6 +531,7 @@ export default function skillRouterExtension(pi: ExtensionAPI) {
   });
 
   pi.on("input", (event, ctx) => {
+    if (event.streamingBehavior === "steer") return;
     const sessionId = ctx.sessionManager.getSessionId();
     const state = getState(sessionId);
     const text = String((event as any).text || "");

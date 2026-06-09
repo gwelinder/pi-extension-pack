@@ -1,4 +1,5 @@
-import type { ExtensionAPI, ExtensionContext, ExtensionCommandContext, Theme } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext, ExtensionCommandContext, Theme } from "@earendil-works/pi-coding-agent";
+import { convertToPng } from "@earendil-works/pi-coding-agent";
 import {
 	allocateImageId,
 	Container,
@@ -11,7 +12,7 @@ import {
 	Text,
 	truncateToWidth,
 	type TUI,
-} from "@mariozechner/pi-tui";
+} from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -22,6 +23,8 @@ interface GalleryImage {
 	path: string;
 	mimeType: string;
 	base64: string;
+	displayMimeType?: string;
+	displayBase64?: string;
 	metadata?: Record<string, unknown>;
 	prompt?: string;
 	revisedPrompt?: string;
@@ -103,6 +106,29 @@ function normalizeImageRecord(filePath: string, metadata?: Record<string, unknow
 	};
 }
 
+async function prepareImageForTerminal(image: GalleryImage): Promise<GalleryImage> {
+	if (image.displayBase64 && image.displayMimeType) return image;
+	const converted = await convertToPng(image.base64, image.mimeType);
+	if (!converted) return image;
+	return {
+		...image,
+		displayBase64: converted.data,
+		displayMimeType: converted.mimeType,
+	};
+}
+
+async function prepareImagesForTerminal(images: GalleryImage[]): Promise<GalleryImage[]> {
+	return Promise.all(images.map((image) => prepareImageForTerminal(image)));
+}
+
+function terminalBase64(image: GalleryImage): string {
+	return image.displayBase64 || image.base64;
+}
+
+function terminalMimeType(image: GalleryImage): string {
+	return image.displayMimeType || image.mimeType;
+}
+
 function imagesFromSummary(summaryPath: string): GalleryImage[] {
 	const summary = readJson(summaryPath);
 	const baseDir = path.dirname(summaryPath);
@@ -167,7 +193,7 @@ function copyToClipboard(text: string): void {
 function fittedImageWidthCells(image: GalleryImage, terminalWidth: number, terminalRows: number, maxCols: number, reserveRows: number, fitToScreen: boolean): number {
 	const inner = Math.max(20, terminalWidth - 4);
 	if (!fitToScreen) return Math.max(20, Math.min(inner, maxCols));
-	const dims = getImageDimensions(image.base64, image.mimeType) || { widthPx: 1440, heightPx: 1800 };
+	const dims = getImageDimensions(terminalBase64(image), terminalMimeType(image)) || { widthPx: 1440, heightPx: 1800 };
 	const cell = getCellDimensions();
 	const availableRows = Math.max(8, terminalRows - reserveRows);
 	const byHeight = Math.floor((availableRows * cell.heightPx * dims.widthPx) / (dims.heightPx * cell.widthPx));
@@ -216,7 +242,7 @@ class InlineImageViewer {
 		container.addChild(new Text(th.fg("accent", th.bold("Codex UI image viewer")) + th.fg("dim", `  ${path.basename(this.image.path)}`), 0, 0));
 		container.addChild(new Text(th.fg("dim", this.image.path), 0, 0));
 		container.addChild(new Text(th.fg("dim", "f/0 fit screen • w fit width • +/- manual zoom • o open • c copy • enter/esc close"), 0, 0));
-		container.addChild(new TerminalImage(this.image.base64, this.image.mimeType, { fallbackColor: (s: string) => th.fg("dim", s) }, {
+		container.addChild(new TerminalImage(terminalBase64(this.image), terminalMimeType(this.image), { fallbackColor: (s: string) => th.fg("dim", s) }, {
 			maxWidthCells: imageCols,
 			filename: path.basename(this.image.path),
 			imageId: this.imageId,
@@ -289,7 +315,7 @@ class NativeGalleryComponent {
 		container.addChild(new Text(th.fg("dim", "←/→ navigate • f/0 fit screen • w fit width • +/- zoom • i prompt • o open • esc close"), 0, 0));
 		container.addChild(new Text(th.fg("toolTitle", path.basename(img.path)) + th.fg("dim", `  ${img.mimeType}`), 0, 0));
 		container.addChild(new Text(th.fg("dim", truncateToWidth(img.path, inner)), 0, 0));
-		container.addChild(new TerminalImage(img.base64, img.mimeType, { fallbackColor: (s: string) => th.fg("dim", s) }, {
+		container.addChild(new TerminalImage(terminalBase64(img), terminalMimeType(img), { fallbackColor: (s: string) => th.fg("dim", s) }, {
 			maxWidthCells: imageCols,
 			filename: path.basename(img.path),
 			imageId: this.imageId,
@@ -307,11 +333,13 @@ class NativeGalleryComponent {
 
 async function showInlineImageViewer(ctx: ExtensionContext | ExtensionCommandContext, image: GalleryImage): Promise<void> {
 	if (!ctx.hasUI) return;
-	await ctx.ui.custom<void>((tui, theme, _kb, done) => new InlineImageViewer(image, theme, tui, () => done(undefined)));
+	const prepared = await prepareImageForTerminal(image);
+	await ctx.ui.custom<void>((tui, theme, _kb, done) => new InlineImageViewer(prepared, theme, tui, () => done(undefined)));
 }
 
 async function showGallery(ctx: ExtensionContext | ExtensionCommandContext, rawPath?: string): Promise<string | null> {
-	const { source, images } = loadImages(rawPath, ctx.cwd);
+	const { source, images: rawImages } = loadImages(rawPath, ctx.cwd);
+	const images = await prepareImagesForTerminal(rawImages);
 	if (!images.length) {
 		if (ctx.hasUI) ctx.ui.notify(`No Codex UI images found${source ? ` at ${source}` : ""}`, "warning");
 		return null;
@@ -378,7 +406,8 @@ export default function codexUiGallery(pi: ExtensionAPI) {
 			path: Type.Optional(Type.String({ description: "Output directory, summary.json, or image path. Defaults to newest .codex-ui-design/.codex-imagegen summary under cwd." })),
 		}),
 		async execute(_toolCallId, params: { path?: string }, _signal, _onUpdate, ctx) {
-			const { source, images } = loadImages(params.path, ctx.cwd);
+			const { source, images: rawImages } = loadImages(params.path, ctx.cwd);
+			const images = await prepareImagesForTerminal(rawImages);
 			let selectedPath: string | null | undefined = images[0]?.path;
 			if (ctx.hasUI && images.length) selectedPath = await showGallery(ctx, params.path);
 			const selected = selectedPath ? (imageByPath(selectedPath, ctx.cwd) || images.find((img) => img.path === selectedPath)) : undefined;

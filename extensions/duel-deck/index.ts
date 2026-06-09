@@ -16,8 +16,8 @@ import { spawn, execSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { Type } from "@sinclair/typebox";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { Type } from "typebox";
 
 interface Contender {
 	id: string;
@@ -267,9 +267,8 @@ async function runContender(
 	await fs.promises.writeFile(sysFile, sysPrompt, "utf-8");
 
 	const args = [
-		"--print", "--no-session",
+		"--print", "--no-session", "--no-tools",
 		"--model", c.model,
-		"--tools", "",
 		"--append-system-prompt", sysFile,
 	];
 	if (c.thinking) args.push("--thinking", c.thinking);
