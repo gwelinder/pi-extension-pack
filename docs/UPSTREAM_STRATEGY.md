@@ -112,6 +112,32 @@ If a filter fails because an upstream repo uses unusual layout, use the relative
 - Keep day-to-day packages unpinned for upstream flow.
 - Tag this repo (`v0.x.y`) for disaster recovery snapshots.
 
+## Safe updates for locally modified third-party skills
+
+Detailed design: [`SAFE_SKILL_UPDATES.md`](SAFE_SKILL_UPDATES.md).
+
+Do **not** use `npx skills update` as the trusted update path for skills that may contain local edits.
+The current `skills` CLI update flow detects upstream tree-hash changes, then reinstalls by calling `skills add -y`.
+Its installer removes and recreates the target skill directory before copying the upstream version, so uncommitted local edits and local-only helper files can be overwritten.
+
+Preferred model for skills we customize:
+
+1. Keep a real git fork/clone for the upstream skill source.
+2. Commit our customizations in that fork instead of editing only the live `~/.agents/skills/<name>` copy.
+3. Pull/merge upstream into the fork using normal git conflict handling.
+4. Let Pi load the fork with package filters, or sync reviewed fork contents into the live skill directory.
+
+For skills that are still installed via `npx skills` and live only under `~/.agents/skills`, build a safe updater before doing bulk updates:
+
+- read `~/.agents/.skill-lock.json` for `sourceUrl`, `ref`, `skillPath`, and recorded upstream `skillFolderHash`;
+- fetch both the recorded base tree and the latest upstream tree for each skill;
+- compare `base -> local -> upstream` file-by-file;
+- auto-apply only clean cases where local equals base or local-only files are untouched;
+- write conflict artifacts for files changed both locally and upstream instead of overwriting;
+- update the lock only after the live directory has been safely merged and verified.
+
+The first implementation should be report-first: no mutation unless the user explicitly approves a specific skill update plan.
+
 ## Ownership rules
 
 Vendor a third-party skill into this repo only when one of these is true:

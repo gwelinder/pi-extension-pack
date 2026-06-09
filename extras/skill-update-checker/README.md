@@ -1,71 +1,81 @@
-# skill-update-checker
+# skill-update-checker / safe skill updater
 
-Generic watched-source update checker for externally maintained Pi skills.
+Report-first safe updater for external skills installed by the `skills` CLI.
 
-Why this exists:
-- some external skill packs update regularly
-- Pi can load copied/manual skills that are **not** installed as updatable Pi packages
-- in that setup, `pi update` alone is not enough because Pi may have no package source to poll
+This replaces the old watched-git-source reminder flow. It is intentionally conservative: scans are read-only, applies require an explicit mode, and local edits are never overwritten silently.
 
-This extension adds a lightweight daily reminder flow inspired by PSPDFKit's `pi-skills-update-checker`, but makes it configurable for your own watched skill sources.
+## Why this exists
+
+Many useful third-party skills live under `~/.agents/skills` and are tracked in `~/.agents/.skill-lock.json`. Gustav sometimes customizes those skills locally, but still wants upstream improvements.
+
+The upstream `npx skills update` flow is unsafe for that because it reinstalls skill directories. This extension reads the lock metadata directly and performs a safer three-way analysis:
+
+- **base** — recorded upstream tree from the lock file
+- **local** — current live skill directory
+- **upstream** — latest upstream tree
 
 ## What it does
 
-- reads watched sources from config
-- checks each watched git source once per day on `session_start`
-- compares local `HEAD` to remote `HEAD` / branch head via `git ls-remote`
-- stores pending update state in:
-  - `~/.pi/agent/extensions/skill-update-checker/state.json`
-- re-shows pending reminders until the local source catches up
-- exposes commands:
-  - `/skill-updates-status`
-  - `/skill-updates-check`
-
-## Config
-
-Global config path:
-- `~/.pi/agent/skill-update-checker.json`
-
-Optional project config path:
-- `<cwd>/.pi/skill-update-checker.json`
-
-Shape:
-
-```json
-{
-  "watch": [
-    {
-      "id": "pi-skills",
-      "label": "PSPDFKit pi-skills",
-      "localPath": "~/.pi/agent/git/github.com/PSPDFKit-labs/pi-skills",
-      "remoteUrl": "https://github.com/PSPDFKit-labs/pi-skills.git",
-      "branch": "main",
-      "applyHint": "Run pi update and then /reload to apply."
-    }
-  ]
-}
-```
-
-## Important caveat
-
-This only works when the watched source is a **real local git checkout**.
-
-If your current external skills are copied into:
-- `~/.agents/skills/`
-- `~/.pi/agent/skills/`
-
-without preserving the source repo as a local git clone somewhere, then there is no local `HEAD` to compare, and you should either:
-1. keep a local clone of the upstream skill repo and watch that path, or
-2. add another sync process that updates the copied skill directory from the watched clone.
+- discovers global `skills` CLI installs from `~/.agents/.skill-lock.json`
+- optionally discovers project installs from `<cwd>/skills-lock.json`
+- fetches GitHub trees/blobs using `GITHUB_TOKEN`, `GH_TOKEN`, or `gh auth token`
+- compares `base -> local -> upstream` file-by-file
+- writes run artifacts under `~/.pi/agent/safe-skill-updates/runs/<run-id>/`
+- preserves local-only files
+- preserves local-only edits
+- stops on real conflicts and writes conflict artifacts
+- can apply clean upstream-only updates with backups
+- can restore from apply backups
 
 ## Commands
 
 ### `/skill-updates-status`
-Show configured watches and current pending/error/up-to-date state.
+Show the last scan/apply summary and report path.
 
-### `/skill-updates-check`
-Force an immediate remote check, bypassing the once-per-day gate.
+### `/skill-updates-scan [skill...] [--scope=global|project|both] [--limit=N]`
+Create a read-only update plan. Alias: `/skill-updates-plan`.
 
-## Suggested next refinement
+### `/skill-updates-check [skill...]`
+Safe alias for scan. It does **not** call `npx skills check` or `npx skills update`.
 
-If you want this to become fully automatic for copied skills, add a separate sync/apply command that copies updated skill files from the watched git checkout into the live skill directory after review.
+### `/skill-updates-diff latest <skill> [file]`
+Show planned file actions for a skill in a run.
+
+### `/skill-updates-apply latest [skill...] --clean-only`
+Apply only clean upstream-only edits/additions and lock-only updates. Creates backups first and aborts if local files changed since the scan.
+
+### `/skill-updates-apply latest [skill...] --include-mergeable`
+Also apply clean text merges produced by `git merge-file`. Conflicts are still never applied.
+
+### `/skill-updates-restore <run> [skill...]`
+Restore live skill directories and lock files from an apply backup.
+
+### `/skill-updates-adopt <skill>`
+Currently explanatory only. Future work: create a safe baseline for skills missing enough lock metadata.
+
+## Artifact root
+
+```text
+~/.pi/agent/safe-skill-updates/
+  state.json
+  baselines/
+  runs/<run-id>/
+    plan.json
+    report.md
+    backups/
+    conflicts/
+    apply.json
+```
+
+## Safety invariants
+
+1. Scan is read-only.
+2. Apply refuses to run without `--clean-only` or `--include-mergeable`.
+3. Apply aborts a skill if local files changed after scan.
+4. Apply creates backups before writing.
+5. Local-only files survive clean apply.
+6. Local-edited files are not overwritten by upstream-edited files.
+7. Conflict markers are never written into live skills.
+8. Lock metadata updates only after a successful safe apply.
+
+See `../../docs/SAFE_SKILL_UPDATES.md` for the full design.
