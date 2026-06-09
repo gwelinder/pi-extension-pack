@@ -1,4 +1,4 @@
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -208,6 +208,12 @@ export default function piSessionNotebook(pi: ExtensionAPI) {
     return next;
   }
 
+  function setSessionNameIfUnset(title: string | undefined): void {
+    const name = title?.replace(/\s+/g, " ").trim();
+    if (!name || pi.getSessionName()) return;
+    pi.setSessionName(name);
+  }
+
   pi.on("session_start", (event, ctx) => {
     const sessionId = ctx.sessionManager.getSessionId();
     const path = notebookPath(sessionId);
@@ -228,6 +234,7 @@ export default function piSessionNotebook(pi: ExtensionAPI) {
 
     ensureNotebook(path);
     const sections = parseNotebookSections(readNotebook(path));
+    setSessionNameIfUnset(sections["Session Title"]);
     const lineageLines = [
       `- Start reason: ${event.reason}`,
       `- Session file: ${ctx.sessionManager.getSessionFile() || "ephemeral"}`,
@@ -344,6 +351,7 @@ export default function piSessionNotebook(pi: ExtensionAPI) {
       "Worklog": worklog,
     };
 
+    setSessionNameIfUnset(nextSections["Session Title"]);
     writeFileSync(path, buildNotebook(nextSections), "utf8");
   });
 

@@ -18,13 +18,20 @@ Experimental gated skill discovery:
 - useful, but should remain opt-in until the policy is proven stable
 
 ### `skill-update-checker`
-Generic watched-source update checker:
-- useful for upstream skill sources
-- requires real local git checkouts for watched sources
-- not enabled by default because the fork/filter strategy in `docs/UPSTREAM_STRATEGY.md` is the main recovery path
+Safe external skill updater:
+- report-first scans for `skills` CLI installs under `~/.agents/skills`
+- compares recorded upstream base, local live files, and latest upstream
+- preserves local edits and writes conflict artifacts instead of overwriting
+- not enabled by default because it is still an operator tool for sensitive skill updates
 
 ### `local-skill-snapshots`
 Disaster-recovery copies of local skills not recorded in `~/.agents/.skill-lock.json` at inventory time. They are intentionally not auto-loaded by the package manifest.
 
-### `claude-inspired-coach`
-Small prompt-layer nudge extension. Kept for reference, but the concrete tool/runtime extensions are the stronger default package.
+### `operating-principles`
+Small prompt-layer nudge extension for always-on Pi working style and Gustav's core operating principles. Kept as an opt-in extra because it intentionally changes the system prompt.
+
+### `retired/pi-magic-docs`
+Sunset Magic Docs extension. Archived for reference only; no longer default because telemetry showed tracked reads but essentially no successful maintenance edits.
+
+### `retired/pi-session-notebook`
+Old automatic per-session notebook. Archived for reference only; no longer default because it overlaps with Pi's native session persistence and `pi-memory-system` while adding prompt weight every turn.

@@ -66,8 +66,6 @@ Inside Pi:
 ```text
 /reload
 /memory-status
-/notebook-status
-/magic-docs-status
 /codex-gallery-clear
 ```
 
