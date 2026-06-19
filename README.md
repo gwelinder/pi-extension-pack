@@ -66,7 +66,7 @@ Compact content extractor for cases where search is not enough:
 
 ### `codegraph`
 Pi-native CodeGraph wrapper for local semantic code intelligence:
-- registers one `codegraph` tool with `context`, `search`, `files`, `callers`, `callees`, `impact`, `affected`, `status`, `sync`, `init`, and `index` actions
+- registers one `codegraph` tool with `context`, `search`, `files`, `callers`, `callees`, `impact`, `affected`, `node`, `explore`, `trace`, `status`, `sync`, `init`, and `index` actions
 - auto-syncs the local `.codegraph/` index before query actions
 - resolves the CLI from `PI_CODEGRAPH_BIN`, the bundled `@colbymchenry/codegraph` dependency, local `node_modules/.bin`, or `PATH`
 - archives very large outputs under `~/.pi/agent/artifacts/codegraph/`

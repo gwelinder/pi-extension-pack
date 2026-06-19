@@ -1,4 +1,4 @@
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import { createRequire } from "node:module";
@@ -24,6 +24,9 @@ type CodeGraphAction =
   | "callees"
   | "impact"
   | "affected"
+  | "node"
+  | "explore"
+  | "trace"
   | "status"
   | "sync"
   | "init"
@@ -33,6 +36,8 @@ type CodeGraphParams = {
   action: CodeGraphAction;
   query?: string;
   symbol?: string;
+  from?: string;
+  to?: string;
   files?: string[];
   projectPath?: string;
   limit?: number;
@@ -40,6 +45,7 @@ type CodeGraphParams = {
   depth?: number;
   maxNodes?: number;
   maxCode?: number;
+  maxFiles?: number;
   maxDepth?: number;
   filter?: string;
   pattern?: string;
@@ -178,6 +184,10 @@ function buildArgs(params: CodeGraphParams, projectPath: string): string[] {
       if (json) args.push("--json");
       return args;
     }
+    case "node":
+    case "explore":
+    case "trace":
+      throw new Error(`codegraph ${params.action} is only available through the MCP bridge.`);
     case "status":
       args.push("status");
       if (json) args.push("--json");
@@ -197,6 +207,35 @@ function buildArgs(params: CodeGraphParams, projectPath: string): string[] {
       if (params.quiet !== false) args.push("--quiet");
       args.push(projectPath);
       return args;
+  }
+}
+
+function mcpToolName(action: CodeGraphAction): string | undefined {
+  if (action === "node") return "codegraph_node";
+  if (action === "explore") return "codegraph_explore";
+  if (action === "trace") return "codegraph_trace";
+  return undefined;
+}
+
+function buildMcpInput(params: CodeGraphParams): Record<string, unknown> {
+  switch (params.action) {
+    case "node":
+      return {
+        symbol: requireString(params.symbol, "symbol"),
+        includeCode: params.includeCode === true,
+      };
+    case "explore":
+      return {
+        query: requireString(params.query, "query"),
+        maxFiles: clampInt(params.maxFiles, 12, 1, 30),
+      };
+    case "trace":
+      return {
+        from: requireString(params.from, "from"),
+        to: requireString(params.to, "to"),
+      };
+    default:
+      return {};
   }
 }
 
@@ -223,6 +262,121 @@ async function runCodeGraph(args: string[], projectPath: string, signal?: AbortS
     env: { ...process.env, NO_COLOR: "1", FORCE_COLOR: "0", TERM: "dumb" },
   });
   return stripAnsi([result.stdout, result.stderr].filter(Boolean).join("\n").trim());
+}
+
+type JsonRpcMessage = {
+  id?: number;
+  result?: { content?: Array<{ type?: string; text?: string }>; isError?: boolean } | unknown;
+  error?: { message?: string; code?: number; data?: unknown };
+};
+
+function mcpResultToText(result: unknown): string {
+  const structured = result as { content?: Array<{ type?: string; text?: string }>; isError?: boolean };
+  if (Array.isArray(structured.content)) {
+    const text = structured.content
+      .map((item) => (item.type === "text" && typeof item.text === "string" ? item.text : JSON.stringify(item)))
+      .filter(Boolean)
+      .join("\n");
+    return text || JSON.stringify(result, null, 2);
+  }
+  return JSON.stringify(result, null, 2);
+}
+
+async function runCodeGraphMcpTool(toolName: string, input: Record<string, unknown>, projectPath: string, signal?: AbortSignal): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(resolveCodeGraphBin(), ["serve", "--mcp", "--path", projectPath, "--no-watch"], {
+      cwd: projectPath,
+      stdio: ["pipe", "pipe", "pipe"],
+      env: { ...process.env, NO_COLOR: "1", FORCE_COLOR: "0", TERM: "dumb" },
+    });
+
+    let settled = false;
+    let stdoutBuffer = "";
+    let stderr = "";
+    let timer: ReturnType<typeof setTimeout>;
+
+    const finish = (error: Error | undefined, output?: string) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", abort);
+      try {
+        child.kill();
+      } catch {
+        // Ignore shutdown races.
+      }
+      if (error) reject(error);
+      else resolve(output ?? "");
+    };
+
+    const abort = () => finish(new Error(`CodeGraph MCP ${toolName} aborted.`));
+    timer = setTimeout(() => {
+      finish(new Error(`CodeGraph MCP ${toolName} timed out after ${DEFAULT_TIMEOUT_MS}ms.${stderr ? `\n${stripAnsi(stderr).trim()}` : ""}`));
+    }, DEFAULT_TIMEOUT_MS);
+
+    signal?.addEventListener("abort", abort, { once: true });
+
+    const send = (message: unknown) => child.stdin.write(`${JSON.stringify(message)}\n`);
+
+    child.stderr.on("data", (chunk) => {
+      stderr = `${stderr}${chunk.toString()}`.slice(-8000);
+    });
+
+    child.on("error", (error) => finish(error));
+    child.on("close", (code) => {
+      if (!settled) finish(new Error(`CodeGraph MCP ${toolName} exited before returning a result (code ${code}).${stderr ? `\n${stripAnsi(stderr).trim()}` : ""}`));
+    });
+
+    child.stdout.on("data", (chunk) => {
+      stdoutBuffer += chunk.toString();
+      let newlineIndex = stdoutBuffer.indexOf("\n");
+      while (newlineIndex >= 0) {
+        const line = stdoutBuffer.slice(0, newlineIndex).trim();
+        stdoutBuffer = stdoutBuffer.slice(newlineIndex + 1);
+        newlineIndex = stdoutBuffer.indexOf("\n");
+        if (!line) continue;
+
+        let message: JsonRpcMessage;
+        try {
+          message = JSON.parse(line) as JsonRpcMessage;
+        } catch {
+          continue;
+        }
+
+        if (message.id === 1) {
+          if (message.error) {
+            finish(new Error(`CodeGraph MCP initialize failed: ${message.error.message || JSON.stringify(message.error)}`));
+            return;
+          }
+          send({ jsonrpc: "2.0", method: "notifications/initialized" });
+          send({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: toolName, arguments: input } });
+          return;
+        }
+
+        if (message.id === 2) {
+          if (message.error) {
+            finish(new Error(`CodeGraph MCP ${toolName} failed: ${message.error.message || JSON.stringify(message.error)}`));
+            return;
+          }
+          const text = mcpResultToText(message.result);
+          const isError = Boolean((message.result as { isError?: boolean } | undefined)?.isError);
+          finish(isError ? new Error(text) : undefined, text);
+          return;
+        }
+      }
+    });
+
+    send({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: {
+        protocolVersion: "2024-11-05",
+        capabilities: {},
+        clientInfo: { name: "pi-codegraph-extension", version: "1" },
+      },
+    });
+  });
 }
 
 function sessionIdFrom(ctx: any): string {
@@ -270,6 +424,7 @@ const codegraphTool = defineTool({
   promptSnippet: "Use codegraph for indexed semantic code exploration before broad grep/read when a repo has a .codegraph index.",
   promptGuidelines: [
     "Use codegraph early for code-facing questions when the repo has a .codegraph index: action=context for broad architecture/feature/bug context, action=search for known symbols/components/files, and action=files for indexed file structure.",
+    "If context is too broad or thin, refine with action=explore for several related symbols/files, action=node for one exact symbol with optional source, or action=trace for a from→to flow. Do not fall back to broad grep just because the first context query was imperfect.",
     "Before changing shared symbols, routes, workflows, tools, auth, database code, or agent pipeline code, use callers/callees/impact/affected to map blast radius and likely tests.",
     "The tool auto-runs incremental codegraph sync before query actions. If codegraph reports pending/stale files or you just edited a file, read those exact source files directly before relying on exact content.",
     "If no index exists and the user wants CodeGraph enabled, use action=init with index=true or run `codegraph init -i` in the project root.",
@@ -285,6 +440,9 @@ const codegraphTool = defineTool({
         Type.Literal("callees"),
         Type.Literal("impact"),
         Type.Literal("affected"),
+        Type.Literal("node"),
+        Type.Literal("explore"),
+        Type.Literal("trace"),
         Type.Literal("status"),
         Type.Literal("sync"),
         Type.Literal("init"),
@@ -293,7 +451,9 @@ const codegraphTool = defineTool({
       { description: "CodeGraph operation to run." },
     ),
     query: Type.Optional(Type.String({ description: "Task/search text for context or search actions." })),
-    symbol: Type.Optional(Type.String({ description: "Symbol name for callers, callees, or impact." })),
+    symbol: Type.Optional(Type.String({ description: "Symbol name for callers, callees, impact, or node." })),
+    from: Type.Optional(Type.String({ description: "For trace: symbol where the flow starts." })),
+    to: Type.Optional(Type.String({ description: "For trace: symbol the flow should reach." })),
     files: Type.Optional(Type.Array(Type.String(), { description: "Changed files for affected-test analysis." })),
     projectPath: Type.Optional(Type.String({ description: "Project path override. Defaults to nearest .codegraph project or the current working directory." })),
     limit: Type.Optional(Type.Number({ description: "Result limit for search/callers/callees." })),
@@ -301,6 +461,7 @@ const codegraphTool = defineTool({
     depth: Type.Optional(Type.Number({ description: "Traversal depth for impact/affected." })),
     maxNodes: Type.Optional(Type.Number({ description: "Max nodes for context (default 20)." })),
     maxCode: Type.Optional(Type.Number({ description: "Max code blocks for context (default 8)." })),
+    maxFiles: Type.Optional(Type.Number({ description: "For explore: maximum files to include source from (default 12)." })),
     maxDepth: Type.Optional(Type.Number({ description: "Max tree depth for files action." })),
     filter: Type.Optional(Type.String({ description: "Directory filter for files, or test glob for affected." })),
     pattern: Type.Optional(Type.String({ description: "Glob pattern for files action." })),
@@ -342,8 +503,11 @@ const codegraphTool = defineTool({
         synced = true;
       }
 
-      const args = buildArgs(params, projectPath);
-      const output = await runCodeGraph(args, projectPath, signal);
+      const toolName = mcpToolName(action);
+      const args = toolName ? ["serve", "--mcp", "--path", projectPath, "--no-watch", `<mcp-tool:${toolName}>`] : buildArgs(params, projectPath);
+      const output = toolName
+        ? await runCodeGraphMcpTool(toolName, buildMcpInput(params), projectPath, signal)
+        : await runCodeGraph(args, projectPath, signal);
       const fullOutput = [`# CodeGraph ${action}`, `Project: ${projectPath}`, synced ? "Index: synced before query" : "Index: not synced by this call", "", output || "(no output)"].join("\n");
       const maxChars = clampInt(params.maxOutputChars, DEFAULT_MAX_OUTPUT_CHARS, 2_000, MAX_OUTPUT_CHARS_LIMIT);
       const truncation = truncateOutput(fullOutput, maxChars);

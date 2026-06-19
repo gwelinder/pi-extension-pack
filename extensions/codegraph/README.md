@@ -10,6 +10,9 @@ It registers a `codegraph` tool for indexed code exploration:
 - `callers` / `callees` — call graph lookup
 - `impact` — blast-radius analysis
 - `affected` — likely affected tests from changed files
+- `node` — exact symbol details and optional source
+- `explore` — source for several related symbols/files grouped by file
+- `trace` — call path between two symbols through the MCP server
 - `status`, `sync`, `init`, `index` — index maintenance
 
 The extension resolves the CLI in this order:
