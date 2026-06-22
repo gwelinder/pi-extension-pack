@@ -90,7 +90,7 @@ function findCodeGraphProject(startPath: string): string | undefined {
   } catch {
     // Ignore and walk from the resolved path.
   }
-  while (true) {
+  for (;;) {
     if (fs.existsSync(path.join(current, ".codegraph", "codegraph.db"))) return current;
     const parent = path.dirname(current);
     if (parent === current) return undefined;
@@ -118,7 +118,7 @@ function packageCodeGraphBin(): string | undefined {
 
 function ancestorBin(name: string): string | undefined {
   let current = typeof __dirname === "string" ? __dirname : process.cwd();
-  while (true) {
+  for (;;) {
     const candidate = path.join(current, "node_modules", ".bin", name);
     if (fs.existsSync(candidate)) return candidate;
     const parent = path.dirname(current);
@@ -138,76 +138,89 @@ function requireString(value: string | undefined, name: string): string {
   return trimmed;
 }
 
-function buildArgs(params: CodeGraphParams, projectPath: string): string[] {
-  const json = params.format === "json";
-  const args: string[] = [];
+type ArgsBuilder = (params: CodeGraphParams, projectPath: string) => string[];
 
-  switch (params.action) {
-    case "context":
-      args.push("context", requireString(params.query, "query"), "--path", projectPath);
-      args.push("--max-nodes", String(clampInt(params.maxNodes, 20, 1, 100)));
-      args.push("--max-code", String(clampInt(params.maxCode, 8, 0, 50)));
-      args.push("--format", json ? "json" : "markdown");
-      if (params.includeCode === false) args.push("--no-code");
-      return args;
-    case "search":
-      args.push("query", requireString(params.query, "query"), "--path", projectPath);
-      args.push("--limit", String(clampInt(params.limit, 12, 1, 100)));
-      if (params.kind?.trim()) args.push("--kind", params.kind.trim());
-      if (json) args.push("--json");
-      return args;
-    case "files":
-      args.push("files", "--path", projectPath);
-      if (params.filter?.trim()) args.push("--filter", params.filter.trim());
-      if (params.pattern?.trim()) args.push("--pattern", params.pattern.trim());
-      if (params.maxDepth !== undefined) args.push("--max-depth", String(clampInt(params.maxDepth, 4, 1, 20)));
-      if (params.format === "flat" || params.format === "grouped" || params.format === "tree") args.push("--format", params.format);
-      if (json) args.push("--json");
-      return args;
-    case "callers":
-    case "callees":
-      args.push(params.action, requireString(params.symbol, "symbol"), "--path", projectPath);
-      args.push("--limit", String(clampInt(params.limit, 20, 1, 100)));
-      if (json) args.push("--json");
-      return args;
-    case "impact":
-      args.push("impact", requireString(params.symbol, "symbol"), "--path", projectPath);
-      args.push("--depth", String(clampInt(params.depth, 2, 1, 10)));
-      if (json) args.push("--json");
-      return args;
-    case "affected": {
-      const files = Array.isArray(params.files) ? params.files.filter((file) => file.trim()) : [];
-      args.push("affected", ...files, "--path", projectPath);
-      args.push("--depth", String(clampInt(params.depth, 5, 1, 20)));
-      if (params.filter?.trim()) args.push("--filter", params.filter.trim());
-      if (params.quiet) args.push("--quiet");
-      if (json) args.push("--json");
-      return args;
-    }
-    case "node":
-    case "explore":
-    case "trace":
-      throw new Error(`codegraph ${params.action} is only available through the MCP bridge.`);
-    case "status":
-      args.push("status");
-      if (json) args.push("--json");
-      return args;
-    case "sync":
-      args.push("sync");
-      if (params.quiet) args.push("--quiet");
-      return args;
-    case "init":
-      args.push("init");
-      if (params.index !== false) args.push("--index");
-      args.push(projectPath);
-      return args;
-    case "index":
-      args.push("index");
-      if (params.force) args.push("--force");
-      if (params.quiet !== false) args.push("--quiet");
-      args.push(projectPath);
-      return args;
-  }
+function maybeJson(args: string[], params: CodeGraphParams): string[] {
+  if (params.format === "json") args.push("--json");
+  return args;
+}
+
+const ARG_BUILDERS: Record<CodeGraphAction, ArgsBuilder> = {
+  context(params, projectPath) {
+    const args = ["context", requireString(params.query, "query"), "--path", projectPath];
+    args.push("--max-nodes", String(clampInt(params.maxNodes, 20, 1, 100)));
+    args.push("--max-code", String(clampInt(params.maxCode, 8, 0, 50)));
+    args.push("--format", params.format === "json" ? "json" : "markdown");
+    if (params.includeCode === false) args.push("--no-code");
+    return args;
+  },
+  search(params, projectPath) {
+    const args = ["query", requireString(params.query, "query"), "--path", projectPath];
+    args.push("--limit", String(clampInt(params.limit, 12, 1, 100)));
+    if (params.kind?.trim()) args.push("--kind", params.kind.trim());
+    return maybeJson(args, params);
+  },
+  files(params, projectPath) {
+    const args = ["files", "--path", projectPath];
+    if (params.filter?.trim()) args.push("--filter", params.filter.trim());
+    if (params.pattern?.trim()) args.push("--pattern", params.pattern.trim());
+    if (params.maxDepth !== undefined) args.push("--max-depth", String(clampInt(params.maxDepth, 4, 1, 20)));
+    if (params.format === "flat" || params.format === "grouped" || params.format === "tree") args.push("--format", params.format);
+    return maybeJson(args, params);
+  },
+  callers: symbolLimitArgs("callers"),
+  callees: symbolLimitArgs("callees"),
+  impact(params, projectPath) {
+    const args = ["impact", requireString(params.symbol, "symbol"), "--path", projectPath];
+    args.push("--depth", String(clampInt(params.depth, 2, 1, 10)));
+    return maybeJson(args, params);
+  },
+  affected(params, projectPath) {
+    const files = Array.isArray(params.files) ? params.files.filter((file) => file.trim()) : [];
+    const args = ["affected", ...files, "--path", projectPath];
+    args.push("--depth", String(clampInt(params.depth, 5, 1, 20)));
+    if (params.filter?.trim()) args.push("--filter", params.filter.trim());
+    if (params.quiet) args.push("--quiet");
+    return maybeJson(args, params);
+  },
+  node: mcpOnlyArgs,
+  explore: mcpOnlyArgs,
+  trace: mcpOnlyArgs,
+  status(params) {
+    return maybeJson(["status"], params);
+  },
+  sync(params) {
+    return params.quiet ? ["sync", "--quiet"] : ["sync"];
+  },
+  init(params, projectPath) {
+    const args = ["init"];
+    if (params.index !== false) args.push("--index");
+    args.push(projectPath);
+    return args;
+  },
+  index(params, projectPath) {
+    const args = ["index"];
+    if (params.force) args.push("--force");
+    if (params.quiet !== false) args.push("--quiet");
+    args.push(projectPath);
+    return args;
+  },
+};
+
+function symbolLimitArgs(action: "callers" | "callees"): ArgsBuilder {
+  return (params, projectPath) => {
+    const args = [action, requireString(params.symbol, "symbol"), "--path", projectPath];
+    args.push("--limit", String(clampInt(params.limit, 20, 1, 100)));
+    return maybeJson(args, params);
+  };
+}
+
+function mcpOnlyArgs(params: CodeGraphParams): string[] {
+  throw new Error(`codegraph ${params.action} is only available through the MCP bridge.`);
+}
+
+function buildArgs(params: CodeGraphParams, projectPath: string): string[] {
+  return ARG_BUILDERS[params.action](params, projectPath);
 }
 
 function mcpToolName(action: CodeGraphAction): string | undefined {
@@ -240,7 +253,7 @@ function buildMcpInput(params: CodeGraphParams): Record<string, unknown> {
 }
 
 function stripAnsi(text: string): string {
-  return text.replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, "");
+  return text.replace(new RegExp(`${String.fromCharCode(27)}\\[[0-9;?]*[ -/]*[@-~]`, "g"), "");
 }
 
 function commandErrorMessage(error: unknown): string {
@@ -270,6 +283,13 @@ type JsonRpcMessage = {
   error?: { message?: string; code?: number; data?: unknown };
 };
 
+type McpRunState = {
+  toolName: string;
+  input: Record<string, unknown>;
+  send: (message: unknown) => void;
+  finish: (error: Error | undefined, output?: string) => void;
+};
+
 function mcpResultToText(result: unknown): string {
   const structured = result as { content?: Array<{ type?: string; text?: string }>; isError?: boolean };
   if (Array.isArray(structured.content)) {
@@ -282,7 +302,46 @@ function mcpResultToText(result: unknown): string {
   return JSON.stringify(result, null, 2);
 }
 
-async function runCodeGraphMcpTool(toolName: string, input: Record<string, unknown>, projectPath: string, signal?: AbortSignal): Promise<string> {
+function handleMcpMessage(message: JsonRpcMessage, state: McpRunState): void {
+  if (message.id === 1) {
+    if (message.error) {
+      state.finish(new Error(`CodeGraph MCP initialize failed: ${message.error.message || JSON.stringify(message.error)}`));
+      return;
+    }
+    state.send({ jsonrpc: "2.0", method: "notifications/initialized" });
+    state.send({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: state.toolName, arguments: state.input } });
+    return;
+  }
+
+  if (message.id !== 2) return;
+  if (message.error) {
+    state.finish(new Error(`CodeGraph MCP ${state.toolName} failed: ${message.error.message || JSON.stringify(message.error)}`));
+    return;
+  }
+  const text = mcpResultToText(message.result);
+  const isError = Boolean((message.result as { isError?: boolean } | undefined)?.isError);
+  state.finish(isError ? new Error(text) : undefined, text);
+}
+
+function parseMcpLines(buffer: string, state: McpRunState): string {
+  let remaining = buffer;
+  let newlineIndex = remaining.indexOf("\n");
+  while (newlineIndex >= 0) {
+    const line = remaining.slice(0, newlineIndex).trim();
+    remaining = remaining.slice(newlineIndex + 1);
+    newlineIndex = remaining.indexOf("\n");
+    if (!line) continue;
+
+    try {
+      handleMcpMessage(JSON.parse(line) as JsonRpcMessage, state);
+    } catch {
+      // Ignore non-JSON progress/log lines on stdout.
+    }
+  }
+  return remaining;
+}
+
+function runCodeGraphMcpTool(toolName: string, input: Record<string, unknown>, projectPath: string, signal?: AbortSignal): Promise<string> {
   return new Promise((resolve, reject) => {
     const child = spawn(resolveCodeGraphBin(), ["serve", "--mcp", "--path", projectPath, "--no-watch"], {
       cwd: projectPath,
@@ -317,6 +376,7 @@ async function runCodeGraphMcpTool(toolName: string, input: Record<string, unkno
     signal?.addEventListener("abort", abort, { once: true });
 
     const send = (message: unknown) => child.stdin.write(`${JSON.stringify(message)}\n`);
+    const mcpState: McpRunState = { toolName, input, send, finish };
 
     child.stderr.on("data", (chunk) => {
       stderr = `${stderr}${chunk.toString()}`.slice(-8000);
@@ -329,41 +389,7 @@ async function runCodeGraphMcpTool(toolName: string, input: Record<string, unkno
 
     child.stdout.on("data", (chunk) => {
       stdoutBuffer += chunk.toString();
-      let newlineIndex = stdoutBuffer.indexOf("\n");
-      while (newlineIndex >= 0) {
-        const line = stdoutBuffer.slice(0, newlineIndex).trim();
-        stdoutBuffer = stdoutBuffer.slice(newlineIndex + 1);
-        newlineIndex = stdoutBuffer.indexOf("\n");
-        if (!line) continue;
-
-        let message: JsonRpcMessage;
-        try {
-          message = JSON.parse(line) as JsonRpcMessage;
-        } catch {
-          continue;
-        }
-
-        if (message.id === 1) {
-          if (message.error) {
-            finish(new Error(`CodeGraph MCP initialize failed: ${message.error.message || JSON.stringify(message.error)}`));
-            return;
-          }
-          send({ jsonrpc: "2.0", method: "notifications/initialized" });
-          send({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: toolName, arguments: input } });
-          return;
-        }
-
-        if (message.id === 2) {
-          if (message.error) {
-            finish(new Error(`CodeGraph MCP ${toolName} failed: ${message.error.message || JSON.stringify(message.error)}`));
-            return;
-          }
-          const text = mcpResultToText(message.result);
-          const isError = Boolean((message.result as { isError?: boolean } | undefined)?.isError);
-          finish(isError ? new Error(text) : undefined, text);
-          return;
-        }
-      }
+      stdoutBuffer = parseMcpLines(stdoutBuffer, mcpState);
     });
 
     send({
@@ -379,15 +405,21 @@ async function runCodeGraphMcpTool(toolName: string, input: Record<string, unkno
   });
 }
 
-function sessionIdFrom(ctx: any): string {
+type SessionContextLike = {
+  sessionManager?: {
+    getSessionId?: () => string | undefined | null;
+  };
+};
+
+function sessionIdFrom(ctx: SessionContextLike): string {
   try {
-    return String(ctx.sessionManager.getSessionId() || "no-session");
+    return String(ctx.sessionManager?.getSessionId?.() || "no-session");
   } catch {
     return "no-session";
   }
 }
 
-function writeArtifact(ctx: any, action: string, output: string): { artifactPath: string; sha256: string } {
+function writeArtifact(ctx: SessionContextLike, action: string, output: string): { artifactPath: string; sha256: string } {
   const sessionId = sessionIdFrom(ctx).replace(/[^a-zA-Z0-9_.-]+/g, "_");
   const sha256 = crypto.createHash("sha256").update(output).digest("hex");
   const dir = path.join(ARTIFACT_ROOT, sessionId);
@@ -544,7 +576,7 @@ const codegraphTool = defineTool({
     if (isPartial) return new Text(theme.fg("muted", "Querying CodeGraph…"), 0, 0);
     const details = result.details as Partial<CodeGraphDetails> | undefined;
     const content = result.content?.[0]?.type === "text" ? result.content[0].text : "";
-    const status = (result as any).isError ? theme.fg("error", "failed") : theme.fg("success", "ok");
+    const status = (result as { isError?: boolean }).isError ? theme.fg("error", "failed") : theme.fg("success", "ok");
     const summary = [`${theme.fg("toolTitle", theme.bold("CodeGraph"))} ${details?.action ?? ""} ${status} ${theme.fg("muted", `${details?.elapsedMs ?? 0}ms`)}`];
     if (details?.truncated && details.artifactPath) summary.push(theme.fg("warning", `full output: ${details.artifactPath}`));
     if (expanded && content) summary.push("", ...content.split("\n").slice(0, 24).map((line) => theme.fg("muted", line)));
