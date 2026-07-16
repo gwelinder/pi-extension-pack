@@ -72,6 +72,8 @@ describe("Bobby sidecar parsing and recall", () => {
   test("generic prompts recall nothing and total injected text is bounded", () => {
     const manifest = parseBobbyManifest({ records: [canonical({ body: "validation ".repeat(400) })] })!;
     expect(selectRelevantMemoryNotes([], manifest.records, "hello can you help")).toEqual([]);
+    const incidental = parseBobbyManifest({ records: [canonical({ name: "Unrelated preference", description: "A different rule", body: "This body happens to mention hello once." })] })!;
+    expect(selectRelevantMemoryNotes([], incidental.records, "say hello")).toEqual([]);
     const notes = selectRelevantMemoryNotes([], manifest.records, "focused validation");
     expect(notes).toHaveLength(1);
     expect(notes.join("\n").length).toBeLessThanOrEqual(1200);

@@ -305,7 +305,7 @@ function scoreCandidate(candidate: MemoryCandidate, queryTokens: string[], query
     if (candidate.name.toLowerCase().includes(normalizedQuery)) { score += 10; strongMatches += 1; }
     else if (candidate.description.toLowerCase().includes(normalizedQuery)) { score += 7; strongMatches += 1; }
   }
-  if (queryTokens.length >= 3 && strongMatches === 0 && bodyMatches < 2) return 0;
+  if ((queryTokens.length === 1 && strongMatches === 0) || (queryTokens.length >= 2 && strongMatches === 0 && bodyMatches < 2)) return 0;
   return score;
 }
 
