@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "mode": "routed",
+  "autoRecommend": {
+    "enabled": true,
+    "minimumScore": 30,
+    "maxCandidates": 2,
+    "maxPromptChars": 520
+  },
+  "skillAliases": {
+    "frontend-design": ["dashboard layout", "production-grade frontend", "build polished web ui"],
+    "vercel-composition-patterns": ["vercel composition", "deployment units", "component composition"],
+    "runwayml": ["runway shot", "runway video", "cinematic transformation"],
+    "wacli": ["whatsapp cli", "whatsapp message blast", "whatsapp delivery status"]
+  },
+  "bundles": [
+    {
+      "name": "code",
+      "triggers": ["implement", "refactor", "bug", "fix", "test", "verify", "cleanup", "commit", "python"],
+      "skills": ["code-ship", "explore", "verify", "simplify", "commit", "uv", "vercel-react-best-practices"]
+    },
+    {
+      "name": "orchestration",
+      "triggers": ["worker", "workers", "subagent", "dispatch", "long-running", "overnight", "tmux", "claude", "codex", "beads"],
+      "skills": ["worker-orchestration", "pi-processes", "beads", "tmux", "gpt-5-5-prompting"]
+    },
+    {
+      "name": "research",
+      "triggers": ["research", "recent", "last 30 days", "discourse", "citation", "pdf", "url", "transcript", "summarize"],
+      "skills": ["research-refresh", "last30days", "summarize", "pi-share"]
+    },
+    {
+      "name": "design",
+      "triggers": ["design", "frontend", "ui", "ux", "redesign", "prototype", "mockup", "landing page", "visual", "screenshot"],
+      "skills": ["design-frontier", "frontend-design", "codex-ui-design", "frontend-stack", "browser-automation", "visual-explainer"]
+    },
+    {
+      "name": "browser",
+      "triggers": ["browser", "website", "web app", "click", "fill", "form", "screenshot", "scrape", "login", "chrome", "playwright"],
+      "skills": ["browser-automation", "dev-browser", "playwriter"]
+    },
+    {
+      "name": "cloudflare",
+      "triggers": ["cloudflare", "workers", "d1", "kv", "r2", "dns", "zone", "wrangler", "durable object"],
+      "skills": ["cloudflare-codemode", "cloudflare", "wrangler", "durable-objects"]
+    },
+    {
+      "name": "skill-maintenance",
+      "triggers": ["skill", "skills", "skill routing", "skill audit", "skill maintenance", "SKILL.md"],
+      "skills": ["effective-agent-skills", "distribute-skill-to-all-agents", "skill-creator"]
+    }
+  ]
+}
