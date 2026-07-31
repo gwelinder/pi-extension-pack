@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "probes": [
+    {
+      "harness": "claude",
+      "measuredAt": "2026-07-14",
+      "command": "claude -p --output-format json --tools ''",
+      "model": "claude-fable-5",
+      "inputTokens": 2,
+      "cacheCreationInputTokens": 18747,
+      "effectiveInitialInputTokens": 18749,
+      "notes": "Actual one-turn usage with tools disabled; Claude did not expose a stable skill-only breakdown."
+    },
+    {
+      "harness": "codex",
+      "measuredAt": "2026-07-14",
+      "command": "codex exec --json --ephemeral --skip-git-repo-check",
+      "inputTokens": 22234,
+      "cachedInputTokens": 9984,
+      "notes": "Actual one-turn usage. Codex emitted a warning that skill descriptions were shortened to its 2% skill-context budget."
+    },
+    {
+      "harness": "hermes",
+      "measuredAt": "2026-07-14",
+      "command": "hermes prompt-size",
+      "model": "gpt-5.5",
+      "systemPromptBytes": 33414,
+      "systemPromptChars": 32906,
+      "skillIndexBytes": 18471,
+      "toolSchemaBytes": 59252,
+      "toolCount": 42,
+      "notes": "Harness-native prompt-size report; no model call."
+    },
+    {
+      "harness": "openclaw",
+      "measuredAt": "2026-07-14",
+      "command": "openclaw agent --local --session-id <audit> --message <probe> --json",
+      "model": "openai/gpt-5.5",
+      "systemPromptChars": 25918,
+      "skillPromptChars": 8699,
+      "skillCount": 60,
+      "toolSummaryAndSchemaChars": 8781,
+      "toolCount": 17,
+      "inputTokens": 24534,
+      "promptTokens": 26966,
+      "notes": "Actual one-turn embedded-agent report from meta.systemPromptReport."
+    }
+  ]
+}

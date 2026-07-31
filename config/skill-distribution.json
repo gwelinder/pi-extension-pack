@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "canonicalRoot": "~/.agents/skills",
+  "targets": {
+    "claude": "~/.claude/skills",
+    "hermes": "~/.hermes/skills",
+    "openclaw": "~/.openclaw/skills"
+  },
+  "skills": {
+    "distribute-skill-to-all-agents": {
+      "class": "portable",
+      "targets": ["claude", "hermes"],
+      "reason": "Cross-harness distribution and topology policy. OpenClaw already discovers the canonical ~/.agents copy."
+    },
+    "effective-agent-skills": {
+      "class": "portable",
+      "targets": ["claude", "hermes"],
+      "reason": "Portable Agent Skills authoring guidance. OpenClaw already discovers the canonical ~/.agents copy."
+    },
+    "folder-specific-claude-and-agents-md": {
+      "class": "portable-coding",
+      "targets": ["claude"],
+      "reason": "Coding-harness folder context workflow; Pi and Codex already discover the canonical ~/.agents copy."
+    },
+    "plannotator-setup-goal": {
+      "class": "portable-coding",
+      "targets": ["claude"],
+      "reason": "Shared Codex/Claude planning workflow with one canonical hidden copy."
+    }
+  },
+  "intentionalOverrides": {
+    "qmd": {
+      "targets": ["hermes-user", "openclaw-workspace"],
+      "reason": "Hermes/OpenClaw qmd is a personal-OS adapter, not the portable QMD skill."
+    }
+  }
+}
