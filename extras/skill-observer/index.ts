@@ -22,6 +22,9 @@ type SkillRecord = {
   location: SkillLocation;
   commandName?: string;
   sha256?: string;
+  packageSource?: string;
+  sourceOrigin?: "package" | "top-level";
+  sourceBaseDir?: string;
 };
 
 type ActiveRun = {
@@ -50,6 +53,9 @@ type SkillCatalogEntry = {
   path?: string;
   location: SkillLocation;
   description?: string;
+  packageSource?: string;
+  sourceOrigin?: "package" | "top-level";
+  sourceBaseDir?: string;
 };
 
 const SCHEMA = "cognee-skill-observer/v1";
@@ -426,6 +432,9 @@ export default function skillObserverExtension(pi: ExtensionAPI) {
         path: normalizePathMaybe(sourceInfo.path, cwd),
         location: (["user", "project", "temporary"].includes(sourceInfo.scope) ? sourceInfo.scope : "unknown") as SkillLocation,
         description: command.description,
+        packageSource: typeof sourceInfo.source === "string" ? sourceInfo.source : undefined,
+        sourceOrigin: sourceInfo.origin === "package" || sourceInfo.origin === "top-level" ? sourceInfo.origin : undefined,
+        sourceBaseDir: normalizePathMaybe(sourceInfo.baseDir, cwd),
       };
 
       skillCatalogByName.set(skillName, entry);
@@ -521,6 +530,9 @@ export default function skillObserverExtension(pi: ExtensionAPI) {
       location: skill.location,
       commandName: skill.commandName,
       sha256: tryReadFileHash(skill.path),
+      packageSource: skill.packageSource,
+      sourceOrigin: skill.sourceOrigin,
+      sourceBaseDir: skill.sourceBaseDir,
     };
 
     run.loadedSkills.set(dedupeKey, record);
@@ -556,6 +568,19 @@ export default function skillObserverExtension(pi: ExtensionAPI) {
 
   pi.on("session_start", (event, ctx) => {
     refreshSkillCatalog(ctx.cwd);
+    const catalogSources = new Map<string, number>();
+    for (const skill of skillCatalogByName.values()) {
+      const key = `${skill.location}:${skill.sourceOrigin ?? "unknown"}:${skill.packageSource ?? "unknown"}`;
+      catalogSources.set(key, (catalogSources.get(key) ?? 0) + 1);
+    }
+    emit("skill_catalog_refreshed", {
+      reason: event.reason,
+      cwd: ctx.cwd,
+      skillCount: skillCatalogByName.size,
+      sources: [...catalogSources.entries()]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([source, count]) => ({ source, count })),
+    });
     sessionSkillMemory.clear();
     lastSessionStartMeta = {
       reason: event.reason,
