@@ -475,6 +475,22 @@ async function fetchBlob(owner: string, repo: string, sha: string): Promise<Buff
   return blobCache.get(key)!;
 }
 
+function resolveSkillFolderPath(tree: GitHubTreeItem[], entry: SkillEntry): string | undefined {
+  const requested = entry.skillFolderPath?.replace(/^\/+|\/+$/g, "");
+  if (requested && tree.some((item) => item.type === "tree" && item.path === requested)) return requested;
+
+  const oldBasename = requested?.split("/").filter(Boolean).at(-1);
+  const acceptedNames = new Set([entry.name, oldBasename].filter(Boolean));
+  const candidates = tree
+    .filter((item) => item.type === "blob" && item.path.endsWith("/SKILL.md"))
+    .map((item) => dirnamePosix(item.path))
+    .filter((folder) => acceptedNames.has(folder.split("/").at(-1)));
+  const unique = [...new Set(candidates)];
+  if (unique.length === 1) return unique[0];
+  if (unique.length > 1) return unique.sort((a, b) => a.split("/").length - b.split("/").length || a.localeCompare(b))[0];
+  return undefined;
+}
+
 function remoteSnapshotFromTree(tree: GitHubTreeItem[], prefix = ""): { treeSha?: string; files: Map<string, SnapshotFile> } {
   const normalizedPrefix = prefix.replace(/^\/+|\/+$/g, "");
   let treeSha: string | undefined;
@@ -797,8 +813,10 @@ async function planSkill(pi: ExtensionAPI, runDir: string, entry: SkillEntry): P
 
   try {
     const source = await fetchRepoSource(gh.owner, gh.repo, entry.ref);
-    const latest = remoteSnapshotFromTree(source.tree, entry.skillFolderPath);
-    if (!latest.treeSha) throw new Error(`Could not find upstream skill folder ${entry.skillFolderPath}`);
+    const resolvedSkillFolderPath = resolveSkillFolderPath(source.tree, entry);
+    if (!resolvedSkillFolderPath) throw new Error(`Could not find upstream skill folder ${entry.skillFolderPath}`);
+    const latest = remoteSnapshotFromTree(source.tree, resolvedSkillFolderPath);
+    if (!latest.treeSha) throw new Error(`Could not read upstream skill folder ${resolvedSkillFolderPath}`);
 
     const local = localSnapshot(entry.liveDir);
     const baseFiles = latest.treeSha === entry.baseTreeSha
@@ -820,8 +838,8 @@ async function planSkill(pi: ExtensionAPI, runDir: string, entry: SkillEntry): P
       ref: entry.ref,
       liveDir: entry.liveDir,
       lockPath: entry.lockPath,
-      skillPath: entry.skillPath,
-      skillFolderPath: entry.skillFolderPath,
+      skillPath: `${resolvedSkillFolderPath}/SKILL.md`,
+      skillFolderPath: resolvedSkillFolderPath,
       baseTreeSha: entry.baseTreeSha,
       latestTreeSha: latest.treeSha,
       status: statusFromSummary(summary, entry.baseTreeSha, latest.treeSha),
@@ -1020,6 +1038,7 @@ function updateLockEntry(skill: SkillPlan): void {
   const lock = readJson<any>(skill.lockPath);
   if (!lock?.skills?.[skill.name]) return;
   lock.skills[skill.name].skillFolderHash = skill.latestTreeSha;
+  if (skill.skillPath) lock.skills[skill.name].skillPath = skill.skillPath;
   lock.skills[skill.name].updatedAt = isoNow();
   writeJson(skill.lockPath, lock);
 }
@@ -1182,13 +1201,13 @@ export default function safeSkillUpdater(pi: ExtensionAPI) {
   pi.on("session_start", (_event, ctx) => {
     const config = loadConfig(ctx.cwd);
     const state = loadState();
-    if (state.lastSummary && (state.lastSummary.cleanUpdates || state.lastSummary.mergeable || state.lastSummary.conflicts || state.lastSummary.needsAdoption)) {
-      pi.sendMessage({
-        customType: "safe-skill-updates-reminder",
-        content: statusMessage(),
-        display: true,
-        details: { state },
-      });
+    if (ctx.hasUI && state.lastSummary) {
+      const issueCount = state.lastSummary.cleanUpdates
+        + state.lastSummary.mergeable
+        + state.lastSummary.conflicts
+        + state.lastSummary.needsAdoption
+        + state.lastSummary.errors;
+      ctx.ui.setStatus("skill-updates", issueCount > 0 ? `skill-updates:${issueCount}!` : undefined);
     }
     if (config.scanOnStartup) {
       pi.sendMessage({

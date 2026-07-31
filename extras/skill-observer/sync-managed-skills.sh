@@ -43,8 +43,7 @@ link_skill "browser-tools"        "$HOME_DIR/.pi/agent/skills/pi-skills/browser-
 link_skill "brave-search"         "$HOME_DIR/.pi/agent/skills/pi-skills/brave-search/SKILL.md"
 link_skill "foreground-chains"    "$HOME_DIR/.pi/agent/skills/foreground-chains/SKILL.md"
 link_skill "codex-cli"            "$HOME_DIR/.pi/agent/skills/codex-cli/SKILL.md"
-link_skill "codex-5-3-prompting"  "$HOME_DIR/.pi/agent/skills/codex-5-3-prompting/SKILL.md"
-link_skill "gpt-5-4-prompting"    "$HOME_DIR/.pi/agent/skills/gpt-5-4-prompting/SKILL.md"
+link_skill "gpt-5-5-prompting"    "$HOME_DIR/.pi/agent/skills/gpt-5-5-prompting/SKILL.md"
 link_skill "worker-reviewer-dispatch" "$HOME_DIR/.pi/agent/skills/worker-reviewer-dispatch/SKILL.md"
 
 # ── Design Engineering ──
