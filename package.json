@@ -26,7 +26,8 @@
     "sync:owned": "node scripts/sync-owned-resources.mjs"
   },
   "dependencies": {
-    "@colbymchenry/codegraph": "0.9.7"
+    "@colbymchenry/codegraph": "0.9.7",
+    "gpt-tokenizer": "3.4.0"
   },
   "peerDependencies": {
     "@earendil-works/pi-ai": "*",
