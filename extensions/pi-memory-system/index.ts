@@ -1,4 +1,5 @@
 import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { StringEnum } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { createHash } from "node:crypto";
@@ -374,11 +375,11 @@ export default function piMemorySystem(pi: ExtensionAPI) {
     promptSnippet: "Search or propose canonical durable memory",
     promptGuidelines: ["Use memory for explicit durable-memory requests. Use memory forget only with an exact canonical record ID returned by memory search; it creates a Bobby deprecate proposal rather than deleting files."],
     parameters: Type.Object({
-      action: Type.Union([Type.Literal("search"), Type.Literal("propose"), Type.Literal("forget"), Type.Literal("status")]),
+      action: StringEnum(["search", "propose", "forget", "status"] as const),
       query: Type.Optional(Type.String({ maxLength: 2_000 })),
       content: Type.Optional(Type.String({ maxLength: 2_000 })),
-      type: Type.Optional(Type.Union([Type.Literal("user"), Type.Literal("feedback"), Type.Literal("project"), Type.Literal("reference")])),
-      scope: Type.Optional(Type.Union([Type.Literal("user"), Type.Literal("private"), Type.Literal("project")])),
+      type: Type.Optional(StringEnum(["user", "feedback", "project", "reference"] as const)),
+      scope: Type.Optional(StringEnum(["user", "private", "project"] as const)),
       recordId: Type.Optional(Type.String({ maxLength: 300 })),
     }),
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {

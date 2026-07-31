@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { defineTool, type ExtensionAPI } from '@earendil-works/pi-coding-agent';
+import { StringEnum } from '@earendil-works/pi-ai';
 import { Text } from '@earendil-works/pi-tui';
 import { Type } from 'typebox';
 
@@ -588,23 +589,8 @@ const codegraphTool = defineTool({
     'Use native read/rg/jq/Python/log tools instead for literal text, generated artifacts, production data shape, runtime logs, prose, PDFs, screenshots, and paths outside indexed source code.',
   ],
   parameters: Type.Object({
-    action: Type.Union(
-      [
-        Type.Literal('context'),
-        Type.Literal('search'),
-        Type.Literal('files'),
-        Type.Literal('callers'),
-        Type.Literal('callees'),
-        Type.Literal('impact'),
-        Type.Literal('affected'),
-        Type.Literal('node'),
-        Type.Literal('explore'),
-        Type.Literal('trace'),
-        Type.Literal('status'),
-        Type.Literal('sync'),
-        Type.Literal('init'),
-        Type.Literal('index'),
-      ],
+    action: StringEnum(
+      ['context', 'search', 'files', 'callers', 'callees', 'impact', 'affected', 'node', 'explore', 'trace', 'status', 'sync', 'init', 'index'] as const,
       { description: 'CodeGraph operation to run.' }
     ),
     query: Type.Optional(
@@ -670,18 +656,9 @@ const codegraphTool = defineTool({
       Type.String({ description: 'Glob pattern for files action.' })
     ),
     format: Type.Optional(
-      Type.Union(
-        [
-          Type.Literal('markdown'),
-          Type.Literal('json'),
-          Type.Literal('tree'),
-          Type.Literal('flat'),
-          Type.Literal('grouped'),
-        ],
-        {
-          description: 'Output format when supported.',
-        }
-      )
+      StringEnum(['markdown', 'json', 'tree', 'flat', 'grouped'] as const, {
+        description: 'Output format when supported.',
+      })
     ),
     includeCode: Type.Optional(
       Type.Boolean({
