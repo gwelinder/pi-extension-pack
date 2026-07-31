@@ -101,7 +101,6 @@ export default function codexModeToggle(pi: ExtensionAPI): void {
   };
 
   pi.on("session_start", (_event, ctx) => updateStatus(ctx));
-  pi.on("session_switch", (_event, ctx) => updateStatus(ctx));
   pi.on("model_select", (_event, ctx) => updateStatus(ctx));
 
   pi.registerCommand("codex-mode", {

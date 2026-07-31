@@ -174,7 +174,11 @@ export default function skillGateway(pi: ExtensionAPI) {
         const loaded = loadSkill(params.name, entries);
         if (!loaded) {
           telemetry(ctx, "load_miss", { name: params.name, catalogSize: entries.length });
-          return { content: [{ type: "text", text: `Unknown skill: ${params.name}. Search with query first.` }], isError: true };
+          return {
+            content: [{ type: "text", text: `Unknown skill: ${params.name}. Search with query first.` }],
+            details: { error: "unknown_skill", name: params.name },
+            isError: true,
+          };
         }
         const offset = Math.max(0, Math.floor(params.offset || 0));
         const maxChars = Math.max(2000, Math.min(24000, Math.floor(params.maxChars || 16000)));
@@ -203,7 +207,11 @@ export default function skillGateway(pi: ExtensionAPI) {
 
       const query = params.query?.trim();
       if (!query) {
-        return { content: [{ type: "text", text: "Provide query=<task description> to search or name=<exact skill name> to load." }], isError: true };
+        return {
+          content: [{ type: "text", text: "Provide query=<task description> to search or name=<exact skill name> to load." }],
+          details: { error: "missing_query_or_name" },
+          isError: true,
+        };
       }
       const started = Date.now();
       const results = searchCatalog(query, entries, params.limit || 5, currentPolicy);

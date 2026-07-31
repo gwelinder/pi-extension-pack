@@ -1,8 +1,9 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ImageContent, TextContent } from "@earendil-works/pi-ai";
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
-type TextPart = { type: string; text?: string };
+type ContentPart = TextContent | ImageContent;
 
 type ProcessInput = {
   action?: string;
@@ -15,14 +16,14 @@ type ProcessInput = {
 const UNSUPPORTED_OUTPUT_KEYS = ["outputLines", "outputMaxChars", "lines", "maxChars", "tail", "limit"];
 const CHILD_EXIT_RE = /\[exit\((-?\d+)\)\]/;
 
-function textContent(content: TextPart[]): string {
+function textContent(content: ContentPart[]): string {
   return content
-    .filter((part) => part.type === "text" && typeof part.text === "string")
+    .filter((part): part is TextContent => part.type === "text")
     .map((part) => part.text)
     .join("\n");
 }
 
-function appendTextContent<T extends TextPart[]>(content: T, text: string) {
+function appendTextContent(content: ContentPart[], text: string): ContentPart[] {
   return [...content, { type: "text", text }];
 }
 
@@ -198,12 +199,12 @@ export default function processFixer(pi: ExtensionAPI) {
     if (input.action !== "output" && input.action !== "logs") return;
     if (event.isError) return;
 
-    const output = textContent(event.content as TextPart[]);
+    const output = textContent(event.content);
     const packageNote = packagePolicyFailureNote(output);
     if (packageNote && !output.includes("Package install")) {
       return {
         isError: true,
-        content: appendTextContent(event.content as TextPart[], `\n${packageNote}`),
+        content: appendTextContent(event.content, `\n${packageNote}`),
       };
     }
     if (output.includes("[process-fixer]")) return;
@@ -216,7 +217,7 @@ export default function processFixer(pi: ExtensionAPI) {
     return {
       isError: true,
       content: appendTextContent(
-        event.content as TextPart[],
+        event.content,
         `\n[process-fixer] The process tool succeeded, but the managed child process exited with code ${code}. Treat the child command as failed; inspect the shown output/logs, fix the underlying command, and restart it if needed.`
       ),
     };
