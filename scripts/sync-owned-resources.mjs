@@ -19,6 +19,22 @@ const ownedExtensions = [
   },
 ];
 
+const optInExtensions = [
+  "process-fixer",
+  "skill-gateway",
+  "skill-observer",
+  "skill-update-checker",
+  "subagent-model-defaults",
+  "tool-profiles",
+  "worker-prompt-compiler",
+  "zz-harness-telemetry",
+  "zz-tool-output-budget",
+].map((name) => ({
+  name,
+  from: path.join(home, ".pi", "agent", "extensions", name),
+  to: path.join(repo, "extras", name),
+}));
+
 const ownedSkills = [
   {
     name: "frontend-stack",
@@ -32,7 +48,14 @@ const ownedSkills = [
   },
 ];
 
-const localSkillSnapshots = ["fal-generate", "plannotator-compound", "video-prompting"].map((name) => ({
+const localSkillSnapshots = [
+  "distribute-skill-to-all-agents",
+  "effective-agent-skills",
+  "fal-generate",
+  "folder-specific-claude-and-agents-md",
+  "plannotator-compound",
+  "video-prompting",
+].map((name) => ({
   name,
   from: path.join(home, ".agents", "skills", name),
   to: path.join(repo, "extras", "local-skill-snapshots", name),
@@ -58,16 +81,10 @@ function copyDir(src, dst) {
   }
 }
 
-for (const item of [...ownedExtensions, ...ownedSkills, ...localSkillSnapshots]) {
+for (const item of [...ownedExtensions, ...optInExtensions, ...ownedSkills, ...localSkillSnapshots]) {
   if (!fs.existsSync(item.from) && localSkillSnapshots.includes(item)) continue;
   copyDir(item.from, item.to);
   console.log(`synced ${item.name}: ${item.from} -> ${path.relative(repo, item.to)}`);
-}
-
-const finderDefaultSource = path.join(home, ".pi", "agent", "extensions", "finder-model-default.ts");
-if (fs.existsSync(finderDefaultSource)) {
-  fs.copyFileSync(finderDefaultSource, path.join(repo, "extensions", "finder-model-default.ts"));
-  console.log("synced finder-model-default.ts");
 }
 
 for (const dir of ["prompts", "themes"]){

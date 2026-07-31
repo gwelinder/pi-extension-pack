@@ -12,7 +12,6 @@ Included by default:
 - **`pi-memory-system`** — Claude-style persistent markdown memory
 - **`codex-ui-gallery`** — high-quality native Pi gallery for Codex UI image outputs
 - **`duel-deck`** — parallel UI generation/model×skill comparison viewer
-- **`finder-model-default`** — default model routing for the Finder tool when env is unset
 - **`frontend-stack`** — local frontend/design skill router
 - **`codex-ui-design`** — image-first UI design workflow via Codex app-server
 
@@ -73,18 +72,20 @@ Pi-native CodeGraph wrapper for local semantic code intelligence:
 - use `codegraph init -i` or the tool's `init` action to enable a new repo
 
 ### `pi-memory-system`
-Adds Claude-style durable markdown memory under `~/.pi/agent/memory/`:
-- typed memories: `user`, `feedback`, `project`, `reference`
-- scoped storage: user, project, private
-- `MEMORY.md` indexes
-- selective memory recall into the system prompt
-- background extraction guarded to memory directories only
-- `/memory-status` now reports counts, index truncation state, selector mode, and extraction diagnostics
+Adds an additive Bobby canonical-memory bridge while preserving native Pi Markdown memory under `~/.pi/agent/memory/` as a resilient, read-only edge-cache and evidence source:
+- Bobby is the canonical reconciliation authority; native Markdown memories are never disabled, deleted, or directly rewritten by this extension
+- `before_agent_start` combines native records with Bobby's generated canonical manifest by exact-token relevance and project identity; active agent-safe canonical records win duplicate/supersession conflicts, with at most two records / 1200 chars injected
+- explicit memory operations create Bobby proposals only; deprecation targets an exact canonical record and never removes native files
+- inferred extraction runs in an isolated, tool-less Pi print child after `agent_end`; it submits pending Bobby proposals off-thread and never adds a turn or message to the main session
+- absent/malformed Bobby manifests or unavailable CLI fail open for conversation and fail closed for canonical mutation
 
-Commands:
-- `/remember`
-- `/forget`
+Configuration: `BOBBY_BIN`, `BOBBY_CANONICAL_MEMORY_ROOT`, and `BOBBY_PI_MEMORY_MANIFEST` select the typed `canonical-memory-client` boundary and manifest. `BOBBY_CANONICAL_MEMORY_COMMANDS_JSON` can override that one boundary for testing. Explicit apply requires the configured Bobby review actor/note receipt path; otherwise proposals remain pending.
+
+Commands/tool:
+- `/remember [type] [scope] :: text`
+- `/forget <record-id or query>`
 - `/memory-status`
+- `memory` tool: `search`, `propose`, `forget`, `status`
 
 ### `codex-ui-gallery`
 High-quality native Pi TUI image gallery for `codex-ui-design` outputs:
@@ -100,9 +101,6 @@ Commands/tool:
 
 ### `duel-deck`
 Runs the same UI task through multiple model×skill combinations and presents generated HTML options in a comparison deck.
-
-### `finder-model-default`
-Sets a preferred `PI_FINDER_MODELS` fallback when the shell environment has not specified one.
 
 ### `frontend-stack`
 A small routing skill for choosing the right local frontend/design skill mix without loading every overlapping UI skill at once.
@@ -129,15 +127,15 @@ Kept in `extras/skill-observer/` because it is still somewhat transitional:
 - bundles shell/python helper scripts with package-relative / `PI_PACKAGE_DIR`-aware resolution
 - likely deserves its own package after further cleanup
 
-### `skill-router`
-Experimental gated skill discovery in `extras/skill-router/`:
-- pairs with a curated visible-core / hidden-specialist skill policy
-- indexes Pi's live discovered skill command catalog, then enriches entries from `SKILL.md` frontmatter (no parallel catalog)
-- injects only top hidden candidates on the first user turn when confidence clears a measured floor
-- exposes exactly one explicit user lookup command: `/skill-find <query>`
-- also provides a model-callable `skill_lookup` tool with compact self-rendered output for later-turn discovery
-- ships with offline eval assets and scorer scripts under `extras/skill-router/eval/`
-- intentionally not enabled by default until longer-term usage proves the policy stable
+### `skill-gateway`
+Unified routed discovery in `extras/skill-gateway/`:
+- preserves Pi's native catalog, package/project precedence, and `/skill:*` commands
+- removes the full generated skill XML block from routed model turns
+- exposes one compact `skill_lookup` tool for both search and exact-name loading
+- injects at most one bounded relevant recommendation per external task
+- records prompt/provider-surface counts without retaining prompt text
+- replaces the retired `skill-router` and `skill-bundle-router`
+- ships with hermetic tests and a 40-prompt routing eval
 
 ### `skill-update-checker`
 Safe external skill updater in `extras/skill-update-checker/`:
@@ -216,28 +214,37 @@ pi-extension-pack/
     pi-memory-system/
     codex-ui-gallery/
     duel-deck/
-    finder-model-default.ts
   skills/
     frontend-stack/
     codex-ui-design/
   prompts/
   themes/
   extras/
+    skill-gateway/
     skill-observer/
-    skill-router/
     skill-update-checker/
+    tool-profiles/
+    codex-mode-toggle/
     local-skill-snapshots/
     operating-principles/
+    retired/skill-router/
+    retired/skill-bundle-router/
     retired/pi-magic-docs/
     retired/pi-session-notebook/
   docs/
     BOOTSTRAP.md
     INVENTORY.md
+    PI_RELEASE_REVIEW.md
     SECRETS.md
     SELECTIVE_INSTALL.md
     UPSTREAM_STRATEGY.md
   scripts/
     audit-local.mjs
+    audit-agent-skill-topology.mjs
+    audit-harness-prompt-surfaces.mjs
+    audit-skill-usage.mjs
+    propose-skill-maintenance.mjs
+    sync-agent-skills.mjs
     check-no-secrets.mjs
     sync-owned-resources.mjs
   package.json

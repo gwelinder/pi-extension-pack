@@ -159,7 +159,7 @@ Because `extensions` is omitted here, all default extensions from the package ma
   "packages": [
     {
       "source": "git:github.com/gwelinder/pi-extension-pack",
-      "extensions": ["extensions/finder-model-default.ts"],
+      "extensions": ["extensions/bash-fixer/index.ts"],
       "skills": [],
       "prompts": [],
       "themes": []

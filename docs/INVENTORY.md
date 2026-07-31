@@ -1,14 +1,14 @@
 # Local Pi package inventory
 
-Generated: 2026-04-30T15:08:52.621Z
+Generated: 2026-07-14T11:31:39.403Z
 
 > This report intentionally lists paths and names only. It does not read or print auth/config contents.
 
 ## Package repo resources
 
 - repo: `/Users/gfw/code/pi-extension-pack`
-- default extensions: 9
-- extras: 5 plus retired archive
+- default extensions: 8
+- extras: 12
 - packaged skills: 2
 
 ### Packaged default extensions
@@ -17,14 +17,9 @@ Generated: 2026-04-30T15:08:52.621Z
 - codex-ui-gallery
 - duel-deck
 - exa
-- finder-model-default.ts
 - pi-memory-system
 - rich-fetch
 - tool-fixer
-
-### Retired / archived extras
-- retired/pi-magic-docs (sunset: many tracked reads, essentially no successful maintenance edits)
-- retired/pi-session-notebook (sunset: overlaps with native Pi sessions and memory recall; prompt tax not justified)
 
 ### Packaged skills
 - codex-ui-design
@@ -36,11 +31,14 @@ Generated: 2026-04-30T15:08:52.621Z
 
 ### Active root-level extension/config files
 - cloudflare-codemode.json (config; do not commit raw if secret-bearing)
-- finder-model-default.ts (packaged)
+- pi-autoresearch.json (config; do not commit raw if secret-bearing)
+- process.json (config; do not commit raw if secret-bearing)
 
 ## Disabled local extensions
 
 - deep-think-prompt
+- skill-bundle-router
+- skill-router
 
 ## Skill sources from ~/.agents/.skill-lock.json
 
@@ -51,6 +49,10 @@ Generated: 2026-04-30T15:08:52.621Z
 ### pbakaus/impeccable (20)
 - upstream: https://github.com/pbakaus/impeccable.git
 - skills: adapt, animate, arrange, audit, bolder, clarify, colorize, critique, delight, distill, extract, harden, normalize, onboard, optimize, overdrive, polish, quieter, teach-impeccable, typeset
+
+### mattpocock/skills (7)
+- upstream: https://github.com/mattpocock/skills.git
+- skills: grill-me, grill-with-docs, handoff, improve-codebase-architecture, prototype, write-a-skill, zoom-out
 
 ### Leonxlnx/taste-skill (6)
 - upstream: https://github.com/Leonxlnx/taste-skill.git
@@ -64,10 +66,6 @@ Generated: 2026-04-30T15:08:52.621Z
 - upstream: https://github.com/cloudflare/skills.git
 - skills: cloudflare, durable-objects, wrangler
 
-### subsy/ralph-tui (3)
-- upstream: https://github.com/subsy/ralph-tui.git
-- skills: ralph-tui-create-beads, ralph-tui-create-json, ralph-tui-prd
-
 ### vercel-labs/agent-skills (3)
 - upstream: https://github.com/vercel-labs/agent-skills.git
 - skills: vercel-composition-patterns, vercel-react-best-practices, web-design-guidelines
@@ -75,6 +73,10 @@ Generated: 2026-04-30T15:08:52.621Z
 ### vercel-labs/next-skills (2)
 - upstream: https://github.com/vercel-labs/next-skills.git
 - skills: next-best-practices, next-cache-components
+
+### ast-grep/agent-skill (1)
+- upstream: https://github.com/ast-grep/agent-skill.git
+- skills: ast-grep
 
 ### digitalsamba/claude-code-video-toolkit (1)
 - upstream: https://github.com/digitalsamba/claude-code-video-toolkit.git
@@ -84,9 +86,9 @@ Generated: 2026-04-30T15:08:52.621Z
 - upstream: https://github.com/emilkowalski/skill.git
 - skills: emil-design-eng
 
-### figma/mcp-server-guide (1)
-- upstream: https://github.com/figma/mcp-server-guide.git
-- skills: implement-design
+### google-gemini/gemini-skills (1)
+- upstream: https://github.com/google-gemini/gemini-skills.git
+- skills: gemini-interactions-api
 
 ### jakubkrehel/make-interfaces-feel-better (1)
 - upstream: https://github.com/jakubkrehel/make-interfaces-feel-better.git
@@ -95,10 +97,6 @@ Generated: 2026-04-30T15:08:52.621Z
 ### levineam/qmd-skill (1)
 - upstream: https://github.com/levineam/qmd-skill.git
 - skills: qmd
-
-### mattpocock/skills (1)
-- upstream: https://github.com/mattpocock/skills.git
-- skills: grill-me
 
 ### millionco/expect (1)
 - upstream: https://github.com/millionco/expect.git
@@ -136,6 +134,10 @@ Generated: 2026-04-30T15:08:52.621Z
 - upstream: https://github.com/steveyegge/beads.git
 - skills: beads
 
+### subsy/ralph-tui (1)
+- upstream: https://github.com/subsy/ralph-tui.git
+- skills: ralph-tui-create-beads
+
 ### supabase/agent-skills (1)
 - upstream: https://github.com/supabase/agent-skills.git
 - skills: supabase-postgres-best-practices
@@ -144,10 +146,6 @@ Generated: 2026-04-30T15:08:52.621Z
 - upstream: https://github.com/vercel/ai.git
 - skills: ai-sdk
 
-### vercel/ai-elements (1)
-- upstream: https://github.com/vercel/ai-elements.git
-- skills: ai-elements
-
 ### vercel/turborepo (1)
 - upstream: https://github.com/vercel/turborepo.git
 - skills: turborepo
@@ -155,9 +153,13 @@ Generated: 2026-04-30T15:08:52.621Z
 ## Local ~/.agents skills not in skill lock
 
 - codex-ui-design
+- distribute-skill-to-all-agents
+- effective-agent-skills
 - fal-generate
+- folder-specific-claude-and-agents-md
 - frontend-stack
 - plannotator-compound
+- plannotator-setup-goal
 - video-prompting
 
 ## Packaged skills not present in ~/.agents
@@ -174,6 +176,7 @@ Generated: 2026-04-30T15:08:52.621Z
 - analytics-tracking -> ../../../.agents/skills/analytics-tracking
 - animate -> ../../../.agents/skills/animate
 - arrange -> ../../../.agents/skills/arrange
+- ast-grep -> ../../../.agents/skills/ast-grep
 - audit -> ../../../.agents/skills/audit
 - beads -> ../../../.agents/skills/beads
 - bolder -> ../../../.agents/skills/bolder
@@ -181,7 +184,6 @@ Generated: 2026-04-30T15:08:52.621Z
 - churn-prevention -> ../../../.agents/skills/churn-prevention
 - clarify -> ../../../.agents/skills/clarify
 - cloudflare -> ../../../.agents/skills/cloudflare
-- codex-5-3-prompting -> /Users/gfw/.nvm/versions/node/v24.13.0/lib/node_modules/pi-interactive-shell/examples/skills/codex-5-3-prompting
 - codex-cli -> /Users/gfw/.nvm/versions/node/v24.13.0/lib/node_modules/pi-interactive-shell/examples/skills/codex-cli
 - codex-ui-design -> ../../../.agents/skills/codex-ui-design
 - cold-email -> ../../../.agents/skills/cold-email
@@ -207,11 +209,14 @@ Generated: 2026-04-30T15:08:52.621Z
 - frontend-skill -> ../../../.agents/skills/frontend-skill
 - frontend-stack -> ../../../.agents/skills/frontend-stack
 - full-output-enforcement -> ../../../.agents/skills/full-output-enforcement
-- gpt-5-4-prompting -> /Users/gfw/.nvm/versions/node/v24.13.0/lib/node_modules/pi-interactive-shell/examples/skills/gpt-5-4-prompting
+- gemini-interactions-api -> ../../../.agents/skills/gemini-interactions-api
 - grill-me -> ../../../.agents/skills/grill-me
+- grill-with-docs -> ../../../.agents/skills/grill-with-docs
+- handoff -> ../../../.agents/skills/handoff
 - harden -> ../../../.agents/skills/harden
 - image-to-code -> ../../../.agents/skills/image-to-code
 - imagegen-frontend-web -> ../../../.agents/skills/imagegen-frontend-web
+- improve-codebase-architecture -> ../../../.agents/skills/improve-codebase-architecture
 - launch-strategy -> ../../../.agents/skills/launch-strategy
 - lead-magnets -> ../../../.agents/skills/lead-magnets
 - make-interfaces-feel-better -> ../../../.agents/skills/make-interfaces-feel-better
@@ -233,6 +238,7 @@ Generated: 2026-04-30T15:08:52.621Z
 - pricing-strategy -> ../../../.agents/skills/pricing-strategy
 - product-marketing-context -> ../../../.agents/skills/product-marketing-context
 - programmatic-seo -> ../../../.agents/skills/programmatic-seo
+- prototype -> ../../../.agents/skills/prototype
 - qmd -> ../../../.agents/skills/qmd
 - quieter -> ../../../.agents/skills/quieter
 - redesign-existing-projects -> ../../../.agents/skills/redesign-existing-projects
@@ -255,6 +261,8 @@ Generated: 2026-04-30T15:08:52.621Z
 - wacli -> ../../../.agents/skills/wacli
 - web-design-guidelines -> ../../../.agents/skills/web-design-guidelines
 - wrangler -> ../../../.agents/skills/wrangler
+- write-a-skill -> ../../../.agents/skills/write-a-skill
+- zoom-out -> ../../../.agents/skills/zoom-out
 
 ## Recommended ownership split
 

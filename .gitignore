@@ -18,6 +18,12 @@ generated-images/
 .codex-ui-design/
 .codex-imagegen/
 
+# Private/generated local audit and transcript outputs
+pi-session-*.html
+docs/AGENT_SKILL_TOPOLOGY_AUDIT.md
+docs/SKILL_MAINTENANCE_AUDIT.md
+docs/SKILL_MAINTENANCE_PROPOSALS.md
+
 # Secrets/config snapshots must be represented by docs/*.example.json only
 auth.json
 settings.json
