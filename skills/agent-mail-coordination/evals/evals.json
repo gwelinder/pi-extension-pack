@@ -1,0 +1,42 @@
+{
+  "skill_name": "agent-mail-coordination",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "I have two Pi agents in the same checkout. One will change app/api/** and the other components/billing/**. Set up a safe coordination workflow before they start.",
+      "expected_output": "Should resolve the absolute repository root, check both path sets for conflicts, start one Agent Mail session per agent with narrow exclusive reservations, use pi as the program, retain the returned agent names without exposing tokens, and define inbox, handoff, acknowledgement, and release steps.",
+      "assertions": [
+        "Uses the absolute repository root as the project key",
+        "Checks conflicts before edits",
+        "Reserves app/api/** and components/billing/** separately",
+        "Does not reserve the whole repository",
+        "Does not expose identity tokens",
+        "Includes release and acknowledgement stopping conditions"
+      ],
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "My schema agent changed a shared type and the API agent must adapt before continuing. How should the agents communicate and prove the handoff landed? The Bead is bd-184.",
+      "expected_output": "Should use bd-184 as the stable Agent Mail thread ID, send a concise ack-required message with the decision, evidence, affected paths, and next action, have the API agent read and acknowledge it, and release reservations only after verification and handoff completion.",
+      "assertions": [
+        "Uses bd-184 as thread ID",
+        "Requires acknowledgement",
+        "Includes affected paths and next action in the message",
+        "Acknowledges only after reading and acting",
+        "Releases reservations at completion"
+      ],
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "I am the only agent reviewing a repository and will not edit anything. Should I initialize Agent Mail?",
+      "expected_output": "Should say no. A single read-only agent has no shared-checkout collision or handoff problem, so Agent Mail adds state without value.",
+      "assertions": [
+        "Does not initialize Agent Mail",
+        "Explains that there is no shared ownership or handoff need"
+      ],
+      "files": []
+    }
+  ]
+}

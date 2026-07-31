@@ -1,0 +1,30 @@
+# Copy to ~/.config/dcg/config.toml after installing DCG.
+# Core filesystem/git and system.disk protections are enabled implicitly.
+
+[general]
+color = "auto"
+verbose = false
+self_heal_hook = true
+hook_timeout_ms = 1000
+
+[packs]
+enabled = [
+  "containers.docker",
+  "containers.compose",
+  "platform.github",
+  "cdn.cloudflare_workers",
+  "database.postgresql",
+  "database.supabase",
+  "package_managers",
+  "system.permissions",
+]
+disabled = []
+
+[interactive]
+enabled = false
+verification = "code"
+timeout_seconds = 5
+code_length = 4
+max_attempts = 3
+allow_non_tty_fallback = true
+disable_in_ci = true

@@ -4,6 +4,12 @@ These extensions are included in the repository for reference, but are **not** p
 
 ## Why they are excluded
 
+### `dcg-guard`
+Useful and installed locally, but it changes command-execution policy:
+- sends Pi `bash`, direct command tools, and static Code Mode command calls through DCG
+- fails closed when a nested command is dynamic or DCG cannot decide
+- stays opt-in until the Code Mode scanner has longer real-session evidence
+
 ### `skill-observer`
 Useful, but still coupled to a more local / transitional setup:
 - analytics-only by default now

@@ -14,6 +14,8 @@ Included by default:
 - **`duel-deck`** — parallel UI generation/model×skill comparison viewer
 - **`frontend-stack`** — local frontend/design skill router
 - **`codex-ui-design`** — image-first UI design workflow via Codex app-server
+- **`agent-mail-coordination`**: collision-safe ownership and handoffs for agents sharing a checkout
+- **`nextjs-ubs-review`**: source-validated UBS review of changed Next.js server boundaries
 
 The default manifest enables production-ready resources under `extensions/` and `skills/`.
 More experimental or locally-coupled pieces live in `extras/`.
@@ -117,7 +119,16 @@ Scripts:
 - `scripts/iterate.sh`
 - `scripts/screenshot.sh`
 
+### `agent-mail-coordination`
+A CLI-first MCP Agent Mail workflow for two or more agents sharing a checkout. It checks conflicts, reserves narrow ownership paths, threads blocker and handoff messages, requires acknowledgements where they matter, and releases reservations at the end. It does not start a background service by default.
+
+### `nextjs-ubs-review`
+A narrow Ultimate Bug Scanner workflow for changed Next.js API routes, middleware, server actions, and other server boundaries. Its wrapper selects at most 200 relevant files, invokes UBS with a compatible modern Bash on macOS, and requires source validation before a scanner candidate becomes a finding.
+
 ## Included in `extras/`, but not enabled by default
+
+### `dcg-guard`
+Opt-in Destructive Command Guard enforcement for Pi's built-in shell tool, direct Codex-style command tools, and static nested command calls inside Code Mode. Dynamic nested commands fail closed because Pi extension hooks cannot inspect them after Code Mode dispatch.
 
 ### `skill-observer`
 Kept in `extras/skill-observer/` because it is still somewhat transitional:
@@ -217,9 +228,12 @@ pi-extension-pack/
   skills/
     frontend-stack/
     codex-ui-design/
+    agent-mail-coordination/
+    nextjs-ubs-review/
   prompts/
   themes/
   extras/
+    dcg-guard/
     skill-gateway/
     skill-observer/
     skill-update-checker/
@@ -233,6 +247,7 @@ pi-extension-pack/
     retired/pi-session-notebook/
   docs/
     BOOTSTRAP.md
+    dcg-config.example.toml
     INVENTORY.md
     PI_RELEASE_REVIEW.md
     SECRETS.md
@@ -258,7 +273,7 @@ pi-extension-pack/
 - `extras/` is included for reference and future extraction, but is not auto-loaded by Pi.
 - Third-party skills should usually remain external/forked package sources with filters; see `docs/UPSTREAM_STRATEGY.md`.
 - Secret-bearing config is represented by examples only; see `docs/SECRETS.md`.
-- When a local owned resource is ahead of the repo, run `npm run sync:owned`, review, then commit so the repository stays canonical.
+- When a local owned resource is ahead of the repo, run `pnpm run sync:owned`, review, then commit so the repository stays canonical.
 - The extensions are designed for Pi's TypeScript extension loader, so no build step is required.
 - Licensed under MIT.
 

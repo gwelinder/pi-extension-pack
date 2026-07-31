@@ -24,7 +24,7 @@ Use example files with placeholders:
 Run:
 
 ```bash
-npm run check:secrets
+pnpm run check:secrets
 ```
 
 The checker blocks obvious credential files and common token patterns. It is a guardrail, not a substitute for review.

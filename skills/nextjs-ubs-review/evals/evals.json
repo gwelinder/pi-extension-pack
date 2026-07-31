@@ -1,0 +1,41 @@
+{
+  "skill_name": "nextjs-ubs-review",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Review the changed Next.js API routes in this branch for security and reliability issues before I open a PR.",
+      "expected_output": "Should inspect the diff, run the bundled changed-file wrapper from the repository root, validate UBS candidates against the cited source and call paths, run relevant project checks, and report confirmed, likely, dismissed, and skipped items without treating raw scanner counts as truth.",
+      "assertions": [
+        "Uses the bundled scan.mjs wrapper",
+        "Scopes to changed Next.js server files",
+        "Validates candidates against source",
+        "Does not equate UBS counts with confirmed findings",
+        "Reports checks run and skipped"
+      ],
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "Run UBS across our entire 2,000-file Next.js monorepo and fix everything it reports.",
+      "expected_output": "Should refuse the noisy whole-monorepo framing, narrow to changed server/API boundaries or a user-selected package/base, enforce the 200-file limit, and fix only source-confirmed findings after validation.",
+      "assertions": [
+        "Does not scan the entire monorepo",
+        "Proposes a changed-file or package-scoped review",
+        "Keeps the 200-file limit",
+        "Fixes only source-confirmed issues"
+      ],
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "I only changed a presentational React component under components/marketing. Run the Next.js UBS review.",
+      "expected_output": "Should report that no applicable changed server boundary exists and should not broaden the scan automatically. It may recommend the normal frontend lint, typecheck, tests, or visual review instead.",
+      "assertions": [
+        "Reports a narrow no-op",
+        "Does not broaden to the whole repository",
+        "Suggests relevant frontend verification"
+      ],
+      "files": []
+    }
+  ]
+}

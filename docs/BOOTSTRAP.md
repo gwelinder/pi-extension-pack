@@ -41,7 +41,38 @@ into `~/.pi/agent/settings.json`, or install the important sources manually with
 
 Prefer using forks under `gwelinder/*` for important upstreams, then keep those forks synced. See `docs/UPSTREAM_STRATEGY.md`.
 
-## 4. Restore secret-bearing config manually
+## 4. Restore optional agent infrastructure
+
+Install the narrow supporting CLIs:
+
+```bash
+brew install bash
+brew install dicklesworthstone/tap/ru
+brew install dicklesworthstone/tap/mcp-agent-mail
+brew install dicklesworthstone/tap/ubs
+brew install dicklesworthstone/tap/cass
+```
+
+Install the latest DCG release from its official release assets, verify its published checksum, then copy the local policy:
+
+```bash
+mkdir -p ~/.config/dcg
+cp docs/dcg-config.example.toml ~/.config/dcg/config.toml
+dcg doctor
+```
+
+The DCG Pi adapter is deliberately opt-in. From a local checkout of this repository:
+
+```bash
+mkdir -p ~/.pi/agent/extensions/dcg-guard
+cp extras/dcg-guard/index.ts extras/dcg-guard/core.ts extras/dcg-guard/README.md ~/.pi/agent/extensions/dcg-guard/
+```
+
+Initialize Repository Updater, then set `PROJECTS_DIR` to the local checkout parent, keep `UPDATE_STRATEGY=ff-only`, `AUTOSTASH=false`, and start with `PARALLEL=1`. Add repositories explicitly with `ru add`; always run a dry run before a real pull.
+
+Do not initialize CASS until its data directory has enough free space for the full session archive and index.
+
+## 5. Restore secret-bearing config manually
 
 Do **not** commit raw config with tokens.
 
@@ -54,7 +85,7 @@ $EDITOR ~/.pi/agent/extensions/cloudflare-codemode.json
 export CF_CODEMODE_TOKEN="..."
 ```
 
-## 5. Verify
+## 6. Verify
 
 ```bash
 pi list
@@ -67,6 +98,7 @@ Inside Pi:
 /reload
 /memory-status
 /codex-gallery-clear
+/dcg-status
 ```
 
 For Codex UI design:
@@ -77,15 +109,15 @@ bash ~/.pi/agent/git/github.com/gwelinder/pi-extension-pack/skills/codex-ui-desi
 
 Path may differ if installed from npm/local path; use `pi list` to inspect package location.
 
-## 6. Maintenance cadence
+## 7. Maintenance cadence
 
 When local owned resources change:
 
 ```bash
 cd /path/to/pi-extension-pack
-npm run sync:owned
-npm run audit > docs/INVENTORY.md
-npm run check:secrets
+pnpm run sync:owned
+pnpm run audit > docs/INVENTORY.md
+pnpm run check:secrets
 git status
 ```
 
