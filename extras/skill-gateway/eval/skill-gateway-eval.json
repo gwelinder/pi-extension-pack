@@ -238,5 +238,41 @@
     "task": "Plan a programmatic SEO play that can scale to thousands of long-tail pages without becoming spammy.",
     "correctSkills": ["programmatic-seo"],
     "notes": "Programmatic SEO strategy"
+  },
+  {
+    "id": "grilling-01",
+    "task": "Grill me one decision at a time about whether we should split this product into two businesses. Look up any facts you can find first.",
+    "correctSkills": ["grilling", "grill-with-docs"],
+    "notes": "Evidence-first decision interview"
+  },
+  {
+    "id": "grill-with-docs-01",
+    "task": "Read this architecture plan and grill me on the unresolved decisions. Check the repository for factual answers and ask only one question at a time.",
+    "correctSkills": ["grill-with-docs"],
+    "notes": "Document-grounded design interview"
+  },
+  {
+    "id": "domain-modeling-01",
+    "task": "Our code confuses account owner, invoice recipient, customer, and user. Help us establish the bounded contexts and a precise domain language before migration.",
+    "correctSkills": ["domain-modeling"],
+    "notes": "DDD vocabulary and ownership"
+  },
+  {
+    "id": "codebase-design-01",
+    "task": "This module has a huge interface and shallow pass-through services. Help me choose a better seam and design a deeper, testable module.",
+    "correctSkills": ["codebase-design", "improve-codebase-architecture"],
+    "notes": "Deep-module and seam design"
+  },
+  {
+    "id": "beads-wayfinder-01",
+    "task": "This migration spans many sessions and the route is still foggy. Map the dependent decisions in Beads and show me the unblocked frontier.",
+    "correctSkills": ["beads-wayfinder", "beads"],
+    "notes": "Beads-native multi-session decision map"
+  },
+  {
+    "id": "skill-distribution-01",
+    "task": "Install this reviewed external skill across Pi, Codex, Claude, Hermes, and OpenClaw using one pinned canonical source and safe per-skill symlinks.",
+    "correctSkills": ["distribute-skill-to-all-agents"],
+    "notes": "Trusted cross-harness skill distribution"
   }
 ]

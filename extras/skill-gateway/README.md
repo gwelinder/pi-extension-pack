@@ -51,8 +51,8 @@ Events include routing decisions, search/load operations, prompt characters remo
 ## Validation
 
 ```bash
-npm run test:skill-gateway
-npm run audit:harness-skills
+pnpm run test:skill-gateway
+pnpm run audit:harness-skills
 ```
 
 The gateway can run with Pi native skills or `--no-skills`. Native discovery is preferred because it preserves Pi's deduplication, package/project skills, and slash commands; the gateway has a filesystem fallback for explicit `--no-skills` evaluation lanes.

@@ -9,8 +9,9 @@
   "skills": {
     "distribute-skill-to-all-agents": {
       "class": "portable",
+      "strategy": "symlink",
       "targets": ["claude", "hermes"],
-      "reason": "Cross-harness distribution and topology policy. OpenClaw already discovers the canonical ~/.agents copy."
+      "reason": "Repo-owned symlink-first distribution and topology policy. Pi, Codex, and OpenClaw discover the canonical ~/.agents copy."
     },
     "effective-agent-skills": {
       "class": "portable",
@@ -26,6 +27,36 @@
       "class": "portable-coding",
       "targets": ["claude"],
       "reason": "Shared Codex/Claude planning workflow with one canonical hidden copy."
+    },
+    "grilling": {
+      "class": "portable-coding",
+      "strategy": "symlink",
+      "targets": ["claude", "hermes"],
+      "reason": "Pinned decision-interview primitive. Pi, Codex, and OpenClaw discover the canonical ~/.agents copy."
+    },
+    "codebase-design": {
+      "class": "portable-coding",
+      "strategy": "symlink",
+      "targets": ["claude", "hermes"],
+      "reason": "Pinned deep-module design vocabulary. Pi, Codex, and OpenClaw discover the canonical ~/.agents copy."
+    },
+    "domain-modeling": {
+      "class": "portable-coding",
+      "strategy": "symlink",
+      "targets": ["claude", "hermes"],
+      "reason": "Repo-owned Beads-native DDD adaptation. Pi, Codex, and OpenClaw discover the canonical ~/.agents copy."
+    },
+    "grill-with-docs": {
+      "class": "portable-coding",
+      "strategy": "symlink",
+      "targets": ["claude", "hermes"],
+      "reason": "Repo-owned evidence-first interview workflow. Pi, Codex, and OpenClaw discover the canonical ~/.agents copy."
+    },
+    "beads-wayfinder": {
+      "class": "portable-coding",
+      "strategy": "symlink",
+      "targets": ["claude", "hermes"],
+      "reason": "Repo-owned Beads decision-map workflow. Pi, Codex, and OpenClaw discover the canonical ~/.agents copy."
     }
   },
   "intentionalOverrides": {

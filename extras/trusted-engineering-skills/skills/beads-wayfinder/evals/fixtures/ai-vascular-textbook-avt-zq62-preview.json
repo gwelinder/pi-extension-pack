@@ -1,0 +1,135 @@
+{
+  "evaluated_at": "2026-08-03",
+  "mode": "read-only-preview",
+  "repository": "/Users/gfw/code/living-book/ai-vascular-textbook",
+  "source_bead": "avt-zq62",
+  "verdict": "re-scope-before-mapping",
+  "reason": "The June Bead describes the pre-M170 system. Current source now pairs every maintenance chapter number with an explicit book_target, defaults maintenance to the 72-chapter Stage 2 book, and retains the 20-chapter production book only as a legacy comparison target. A map based on the original description would duplicate completed work and obscure the remaining stable-identity decision.",
+  "observed_evidence": [
+    {
+      "path": "src/lib/stage2/live-runs/book-target.ts",
+      "observation": "BookTarget distinguishes stage2_rutherford_72 from production_legacy_20 and defaults to Stage 2.",
+      "contains": [
+        "export const BOOK_TARGETS = ['stage2_rutherford_72', 'production_legacy_20'] as const;",
+        "export const DEFAULT_BOOK_TARGET: BookTarget = 'stage2_rutherford_72';"
+      ]
+    },
+    {
+      "path": "src/lib/stage2/live-runs/chapter-maintenance-profiles.ts",
+      "observation": "Profiles declare book_target but remain addressed by chapter_number within that target and also carry slug and identity anchors.",
+      "contains": [
+        "book_target: BookTarget;",
+        "chapter_number: number;",
+        "return CHAPTER_MAINTENANCE_PROFILES[bookTarget]?.[chapterNumber] ?? null;"
+      ]
+    },
+    {
+      "path": "src/lib/stage2/live-runs/identity-snapshot.ts",
+      "observation": "The Worker-safe Stage 2 snapshot resolves chapters by both number and slug and stamps a committed snapshot hash.",
+      "contains": [
+        "export function resolveChapterByNumber",
+        "export function resolveChapterBySlug",
+        "export const IDENTITY_SNAPSHOT_HASH"
+      ]
+    },
+    {
+      "path": "src/app/api/admin/stage2/maintenance/evidence-packet/route.ts",
+      "observation": "The chapter picker still enumerates the committed Stage 2 identity snapshot by chapter number.",
+      "contains": [
+        "function chapterPickerList()",
+        "return allChapterNumbers().map((number)"
+      ]
+    },
+    {
+      "path": "migrations/0080_stage2_maintenance_inventory.sql",
+      "observation": "Inventory persists book_target at the inventory level while chapter rows remain uniquely keyed by inventory_id and chapter_number.",
+      "contains": [
+        "book_target TEXT NOT NULL DEFAULT 'stage2_rutherford_72'",
+        "UNIQUE(inventory_id, chapter_number)"
+      ]
+    },
+    {
+      "path": ".beads/issues.jsonl",
+      "observation": "avt-zq62 remains open with a description that predates the M170 book-target abstraction.",
+      "contains": [
+        "\"id\":\"avt-zq62\"",
+        "\"status\":\"open\"",
+        "\"updated_at\":\"2026-06-06T21:45:13Z\""
+      ]
+    }
+  ],
+  "proposed_map": {
+    "title": "Decide the durable Stage 2 maintenance chapter identity after M170",
+    "destination": "An implementation-ready identity contract that states whether book_target plus chapter_number is sufficient, or defines a stable chapter key and migration path without weakening the review-only or human-publication gates.",
+    "boundaries": [
+      "No chapter prose, references, proposals, or production data mutation.",
+      "No deployment or publication.",
+      "Do not reopen the already-resolved cross-book ambiguity as if M170 did not exist.",
+      "Treat the 72-chapter Stage 2 book as canonical and the 20-chapter book as legacy-only."
+    ],
+    "first_frontier": [
+      {
+        "title": "Inventory the remaining chapter identity contracts after M170",
+        "type": "decision",
+        "label": "wayfinder:research",
+        "blocked_by": [],
+        "resolution_evidence": "A field-and-consumer census covering profiles, scope selectors, packets, inventory, memory lineage, picker routes, and preview registry identity."
+      },
+      {
+        "title": "Choose the canonical Stage 2 maintenance chapter identifier",
+        "type": "decision",
+        "label": "wayfinder:grilling",
+        "blocked_by": [
+          "Inventory the remaining chapter identity contracts after M170"
+        ],
+        "resolution_evidence": "A precise identity invariant comparing book_target plus ordinal, slug, preview-registry key, content address, and any new stable key."
+      },
+      {
+        "title": "Set the legacy target compatibility and retirement boundary",
+        "type": "decision",
+        "label": "wayfinder:grilling",
+        "blocked_by": [
+          "Choose the canonical Stage 2 maintenance chapter identifier"
+        ],
+        "resolution_evidence": "A rule aligned with R7 for how production_legacy_20 is referenced until removal."
+      },
+      {
+        "title": "Define migration, verification, and rollback gates",
+        "type": "decision",
+        "label": "wayfinder:grilling",
+        "blocked_by": [
+          "Choose the canonical Stage 2 maintenance chapter identifier",
+          "Set the legacy target compatibility and retirement boundary"
+        ],
+        "resolution_evidence": "An expand-migrate-contract route with packet lineage preservation, smoke coverage, map drift checks, and no clinical mutation."
+      }
+    ],
+    "fog": [
+      "Exact schema and API changes cannot be sliced until the canonical identifier is chosen.",
+      "Whether old persisted packets need translation or only read-time interpretation depends on their current consumers and retention contract."
+    ],
+    "out_of_scope": [
+      "R6b search and embedding cutover",
+      "Podcast coverage",
+      "Clinical content changes",
+      "Executing a D1 migration",
+      "Production or preview deployment"
+    ],
+    "stopping_evidence": [
+      "One canonical identity invariant is accepted.",
+      "Legacy compatibility has an explicit end condition.",
+      "Every persisted and API consumer has a migration disposition.",
+      "Verification proves no cross-book retargeting and no clinical mutation.",
+      "avt-zq62 is updated, superseded, or closed to reflect the post-M170 reality."
+    ]
+  },
+  "writes_performed": [],
+  "assertions": {
+    "recognized_m170_as_completed_work": true,
+    "asked_user_for_discoverable_facts": false,
+    "created_beads": false,
+    "created_planning_markdown": false,
+    "mutated_textbook_or_product_data": false,
+    "started_implementation": false
+  }
+}

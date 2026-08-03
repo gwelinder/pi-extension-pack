@@ -20,6 +20,13 @@ Use a **hybrid source model**:
    - If one source repo contains many skills, install that repo once with a filtered `skills` list.
    - Forking every single skill into a separate repo is possible, but creates a lot of maintenance overhead.
 
+4. **Pin skills that act as trusted executable policy**
+   - Keep a reviewed upstream checkout under `~/.agents/vendor/trusted-skills`.
+   - Expose only allowlisted skill directories through canonical per-skill links.
+   - Record the full commit SHA, dependencies, and directory hashes in `config/trusted-skill-sources.json`.
+   - Adapt conflicting behavior in repo-owned skills instead of editing the upstream checkout.
+   - See [`TRUSTED_ENGINEERING_SKILLS.md`](TRUSTED_ENGINEERING_SKILLS.md).
+
 ## Is skill-by-skill forking possible?
 
 Yes. A single-skill repo only needs a `package.json` with a `pi.skills` manifest or a conventional `skills/<name>/SKILL.md` structure:
@@ -109,7 +116,8 @@ If a filter fails because an upstream repo uses unusual layout, use the relative
 
 - Unpinned git sources update with `pi update --extensions`.
 - `git:github.com/user/repo@v1.2.3` is pinned and skipped by updates.
-- Keep day-to-day packages unpinned for upstream flow.
+- Keep low-risk day-to-day packages unpinned only when automatic upstream flow is acceptable.
+- Pin any skill used as trusted cross-harness engineering policy and move the pin only after diff, audit, evaluation, and a bounded pilot.
 - Tag this repo (`v0.x.y`) for disaster recovery snapshots.
 
 ## Safe updates for locally modified third-party skills

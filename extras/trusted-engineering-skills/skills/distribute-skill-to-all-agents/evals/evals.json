@@ -1,0 +1,42 @@
+{
+  "skill_name": "distribute-skill-to-all-agents",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Install this audited coding skill universally. Pi, Codex, and OpenClaw can already discover ~/.agents, while Claude and Hermes need explicit exposure.",
+      "expected_output": "Should make one canonical per-skill source under ~/.agents, link only Claude and Hermes explicitly, preserve native roots, back up conflicts, and verify discovery without whole-root symlinks.",
+      "files": [],
+      "expectations": [
+        "Uses one canonical per-skill source",
+        "Does not create redundant Pi, Codex, or OpenClaw copies",
+        "Creates explicit Claude and Hermes links",
+        "Backs up conflicting paths",
+        "Never replaces an entire skills root"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Matt's skills repo changed on main. Pull it automatically every night and make every harness use whatever is newest.",
+      "expected_output": "Should reject automatic activation, keep the current pin, and prescribe fetch, diff, dependency and side-effect audit, evaluations, bounded pilot, explicit pin move, and rollback retention.",
+      "files": [],
+      "expectations": [
+        "Keeps the active immutable pin",
+        "Does not schedule automatic activation",
+        "Requires diff and dependency review",
+        "Requires evaluations and a bounded pilot",
+        "Retains the prior snapshot for rollback"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Copy this Pi-only browser skill into Claude, Hermes, Codex, and OpenClaw so everything has the same list.",
+      "expected_output": "Should classify the skill as harness-native, leave it Pi-local, and explain that equal catalogs are less important than compatible behavior.",
+      "files": [],
+      "expectations": [
+        "Identifies harness-specific tool dependencies",
+        "Keeps the skill Pi-local",
+        "Does not distribute merely for catalog symmetry"
+      ]
+    }
+  ]
+}

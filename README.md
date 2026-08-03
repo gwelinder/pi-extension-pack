@@ -125,6 +125,17 @@ A CLI-first MCP Agent Mail workflow for two or more agents sharing a checkout. I
 ### `nextjs-ubs-review`
 A narrow Ultimate Bug Scanner workflow for changed Next.js API routes, middleware, server actions, and other server boundaries. Its wrapper selects at most 200 relevant files, invokes UBS with a compatible modern Bash on macOS, and requires source validation before a scanner candidate becomes a finding.
 
+### Trusted engineering skills
+The reviewed cross-harness set combines pinned Matt Pocock reasoning primitives with repo-owned Beads adaptations:
+- `grilling`
+- `codebase-design`
+- `domain-modeling`
+- `grill-with-docs`
+- `beads-wayfinder`
+- `distribute-skill-to-all-agents`
+
+Source pins, expected hashes, per-skill symlinks, backups, update gates, and the `ai-vascular-textbook` pilot are documented in [`docs/TRUSTED_ENGINEERING_SKILLS.md`](docs/TRUSTED_ENGINEERING_SKILLS.md).
+
 ## Included in `extras/`, but not enabled by default
 
 ### `dcg-guard`
@@ -233,6 +244,12 @@ pi-extension-pack/
   prompts/
   themes/
   extras/
+    trusted-engineering-skills/
+      skills/
+        domain-modeling/
+        grill-with-docs/
+        beads-wayfinder/
+        distribute-skill-to-all-agents/
     dcg-guard/
     skill-gateway/
     skill-observer/

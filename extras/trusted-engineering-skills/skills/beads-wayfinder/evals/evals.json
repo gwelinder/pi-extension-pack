@@ -1,0 +1,43 @@
+{
+  "skill_name": "beads-wayfinder",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Map the durable fix for a maintenance system that confuses a live 20-chapter book, a 72-chapter rewrite snapshot, and a 207-chapter source taxonomy. The repo has Beads and strict no-publish rules. Preview it first; do not write anything.",
+      "expected_output": "Should inspect repository and Bead evidence, define a stable-identity destination, preview a small decision frontier and real blockers, preserve publication boundaries, and create neither Beads nor Markdown artifacts.",
+      "files": [],
+      "expectations": [
+        "Uses a stable identity destination rather than bare chapter numbers",
+        "Previews rather than writing Beads",
+        "Separates precise frontier tickets from fog",
+        "Preserves no-publish and no-data-mutation boundaries",
+        "Does not create Markdown tickets or start implementation"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Fix this obvious typo and its existing unit test. It is a five-minute one-session change. Use Wayfinder.",
+      "expected_output": "Should decline Wayfinder because the route is clear and the work fits one session, then hand off to the normal implementation workflow.",
+      "files": [],
+      "expectations": [
+        "Does not create a map",
+        "Explains that the task lacks multi-session fog",
+        "Routes to the normal implementation workflow"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Start a Wayfinder map in this initialized Beads repo for replacing our account identifier. Two agents will work concurrently, and some migration decisions depend on current production data shape.",
+      "expected_output": "Should read instructions and bd prime, establish the destination with the user, create a Beads epic and only visible decision children after authorization, wire native dependencies, use atomic claims, and reserve exact file paths through Agent Mail only when edits begin.",
+      "files": [],
+      "expectations": [
+        "Uses a Beads epic labeled wayfinder:map",
+        "Uses decision children and native dependencies",
+        "Keeps production data investigation separate from implementation",
+        "Uses atomic Beads claims",
+        "Uses Agent Mail for exact path ownership rather than ticket truth",
+        "Does not publish or deploy"
+      ]
+    }
+  ]
+}

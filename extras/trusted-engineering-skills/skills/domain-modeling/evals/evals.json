@@ -1,0 +1,41 @@
+{
+  "skill_name": "domain-modeling",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "This repo has a Bead about a maintenance runner that confuses the live 20-chapter book, a 72-chapter rewrite snapshot, and a stable database row. Help me model the domain before we change code.",
+      "expected_output": "Should inspect repository and Bead evidence, distinguish book identity, chapter identity, ordinal, and maintenance target, identify ownership and contradictions, and keep evolving decisions in Beads without creating a glossary or ADR automatically.",
+      "files": [],
+      "expectations": [
+        "Separates stable identity from chapter number and display labels",
+        "Inspects discoverable facts instead of asking the user",
+        "Uses Beads for evolving decision state",
+        "Does not create CONTEXT.md or an ADR without passing the artifact gates",
+        "Stops before implementation"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Create a durable glossary for our ordering and billing contexts. We have repeatedly confused Customer, Account Holder, Invoice Recipient, and User, and the code confirms they have different owners and lifecycles.",
+      "expected_output": "Should verify existing instruction and domain artifacts, model contexts from ownership and lifecycle, write concise project-specific glossary terms, and create a context map only if the cross-context relationships are genuinely durable.",
+      "files": [],
+      "expectations": [
+        "Uses ownership and lifecycle rather than directory layout to identify contexts",
+        "Defines canonical terms and terms to avoid",
+        "Keeps implementation details out of the glossary",
+        "Creates only the durable artifacts authorized by the request"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "We chose a normal retry loop for one internal HTTP call. Add it to the domain model and write an ADR.",
+      "expected_output": "Should decline both artifacts because retry mechanics are a general implementation concept and the decision is neither domain language nor a surprising hard-to-reverse tradeoff.",
+      "files": [],
+      "expectations": [
+        "Does not add a general programming concept to CONTEXT.md",
+        "Applies all three ADR conditions",
+        "Explains why no durable artifact is warranted"
+      ]
+    }
+  ]
+}

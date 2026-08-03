@@ -1,0 +1,40 @@
+{
+  "skill_name": "grill-with-docs",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Grill me on docs/payment-redesign.md. The repository can tell you which callers still use the old payment identifier, but I need to decide whether account ownership or invoice ownership controls the migration.",
+      "expected_output": "Should read instructions and the document, investigate callers itself, explain the current understanding, and ask one ownership decision with a recommendation. It should wait rather than editing or implementing immediately.",
+      "files": [],
+      "expectations": [
+        "Investigates caller facts instead of asking the user",
+        "Asks exactly one decision question",
+        "Provides a recommended answer and tradeoffs",
+        "Does not edit or implement before shared understanding"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Read this short deployment note and tell me which command it says to run. There is no design decision here.",
+      "expected_output": "Should answer the factual question directly and avoid initiating an unnecessary interview or creating artifacts.",
+      "files": [],
+      "expectations": [
+        "Answers the factual question directly",
+        "Does not manufacture a decision interview",
+        "Creates no new artifact"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Grill this rough modernization idea. It spans several sessions, has unknown migration boundaries, and this repository already uses Beads.",
+      "expected_output": "Should use the interview to settle the destination and visible frontier, then route the persistent map to beads-wayfinder rather than writing a large planning document.",
+      "files": [],
+      "expectations": [
+        "Identifies the effort as multi-session fog",
+        "Uses Beads Wayfinder for durable mapping",
+        "Does not create a standalone Markdown plan",
+        "Keeps implementation outside the interview"
+      ]
+    }
+  ]
+}

@@ -80,7 +80,9 @@ Classes:
 3. **Harness-native** — remains in Hermes/OpenClaw/Claude/Pi unless deliberately generalized.
 4. **Project-local** — remains under the repository that owns its domain context.
 
-`config/skill-distribution.json` is the managed allowlist. `scripts/sync-agent-skills.mjs` changes only explicitly named target folders and never deletes unlisted native skills.
+`config/skill-distribution.json` is the harness-target allowlist. `scripts/sync-agent-skills.mjs` changes only explicitly named target folders, supports per-skill symlinks, and backs up a conflicting named path before replacement. It never deletes unlisted native skills.
+
+Trusted third-party skills have an additional source gate: `config/trusted-skill-sources.json` pins reviewed commits and directory hashes, while `scripts/manage-trusted-skills.mjs` materializes immutable vendor snapshots and activates only allowlisted skill directories. See `docs/TRUSTED_ENGINEERING_SKILLS.md`.
 
 The recursive topology audit now includes:
 
@@ -113,6 +115,8 @@ See `docs/SKILL_QUALITY_POLICY.md`.
 `skill-update-checker` remains report-first. Scans do not mutate skills. The updater now recovers common upstream folder moves by matching unique skill-folder basenames and records the resolved path on a later safe apply.
 
 The latest full scan found substantial upstream reorganizations and conflicts, so no bulk update was applied.
+
+The trusted engineering set is deliberately separate from branch-following package updates. Fetch, diff, audit, evaluate, pilot, and explicitly move its immutable pin; Repository Updater does not own this lane.
 
 ## Migration state
 

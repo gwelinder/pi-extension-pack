@@ -1,0 +1,82 @@
+{
+  "version": 1,
+  "canonicalRoot": "~/.agents/skills",
+  "vendorRoot": "~/.agents/vendor/trusted-skills",
+  "backupRoot": "~/.agents/skill-backups/trusted-skills",
+  "lockFile": "~/.agents/.skill-lock.json",
+  "shadowRoots": {
+    "pi": "~/.pi/agent/skills",
+    "openclaw": "~/.openclaw/skills",
+    "codex": "~/.codex/skills"
+  },
+  "sources": {
+    "mattpocock-skills": {
+      "kind": "git",
+      "url": "https://github.com/mattpocock/skills.git",
+      "revision": "2ab958093e83e0ec752e6c1c5932da465bf23e0c",
+      "reviewedAt": "2026-08-03",
+      "license": "MIT",
+      "updatePolicy": "fetch-diff-audit-evaluate-pilot-apply",
+      "skills": [
+        {
+          "name": "grilling",
+          "path": "skills/productivity/grilling",
+          "sha256": "653ba940d1c4e666aa367ef174e14ef25d154641ccf0352e81dd8bb06306f293",
+          "dependencies": [],
+          "reason": "Small evidence-first decision interview primitive with no side-effecting commands."
+        },
+        {
+          "name": "codebase-design",
+          "path": "skills/engineering/codebase-design",
+          "sha256": "529589866c40f1108c4e25d0db0b512d48482dc85da76827dfb708abd626c1ff",
+          "dependencies": [],
+          "reason": "Stable deep-module, seam, adapter, locality, and interface vocabulary."
+        }
+      ]
+    },
+    "pi-extension-pack": {
+      "kind": "local",
+      "revision": "trusted-engineering-v5",
+      "reviewedAt": "2026-08-03",
+      "license": "MIT",
+      "updatePolicy": "new-immutable-revision-after-evals",
+      "skills": [
+        {
+          "name": "distribute-skill-to-all-agents",
+          "path": "extras/trusted-engineering-skills/skills/distribute-skill-to-all-agents",
+          "sha256": "c6807d45cc98be98f849d7016955a14ee6f29c88726e526f5123be8b7e954bf5",
+          "dependencies": [],
+          "reason": "Symlink-first cross-harness distribution with immutable third-party pins and recoverable replacement."
+        },
+        {
+          "name": "domain-modeling",
+          "path": "extras/trusted-engineering-skills/skills/domain-modeling",
+          "sha256": "9b171805a123111c83f2a3596e09d41713389513a07022752b2a036d0146ec0f",
+          "dependencies": [],
+          "reason": "Beads-native DDD adaptation with restrained glossary and ADR gates."
+        },
+        {
+          "name": "grill-with-docs",
+          "path": "extras/trusted-engineering-skills/skills/grill-with-docs",
+          "sha256": "2190cfc2bf9ba12c4be9fbc378ce3bad26ed4d6974fd1156bf5c123fb85931c0",
+          "dependencies": [
+            "grilling",
+            "domain-modeling",
+            "codebase-design"
+          ],
+          "reason": "Cross-harness interview workflow without mandatory Markdown output."
+        },
+        {
+          "name": "beads-wayfinder",
+          "path": "extras/trusted-engineering-skills/skills/beads-wayfinder",
+          "sha256": "4605302d9c19520ed6513abee6f34c7c13c5f5e3d063be55426b68f844d83914",
+          "dependencies": [
+            "grill-with-docs",
+            "domain-modeling"
+          ],
+          "reason": "Decision mapping, native dependencies, atomic claims, and implementation handoff through Beads."
+        }
+      ]
+    }
+  }
+}
