@@ -330,9 +330,21 @@ function renderRelevantMemory(candidate: RankedMemory, maxChars: number): string
   return `${full.slice(0, Math.max(0, maxChars - 24)).trimEnd()}\n… [memory truncated]`;
 }
 
-export function selectRelevantMemoryNotes(native: MemoryCandidate[], canonical: MemoryCandidate[], query: string, currentProjectId?: string): string[] {
+export function selectRelevantMemoryNotes(native: MemoryCandidate[], canonical: MemoryCandidate[], query: string, currentProjectId?: string, maxChars = MAX_RELEVANT_CHARS): string[] {
+  return selectRelevantMemoryNotesWithBudget(native, canonical, query, currentProjectId, maxChars);
+}
+
+/** Direct character bound for Pi's ambient edge capsule. Bobby's token-budget
+ * eval is a separate authority projection and is not converted locally. */
+export function ambientBudgetChars(value = process.env.PI_MEMORY_AMBIENT_MAX_CHARS): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return MAX_RELEVANT_CHARS;
+  return Math.min(8_000, Math.max(200, Math.floor(parsed)));
+}
+
+export function selectRelevantMemoryNotesWithBudget(native: MemoryCandidate[], canonical: MemoryCandidate[], query: string, currentProjectId: string | undefined, maxChars: number): string[] {
   const notes: string[] = [];
-  let remaining = MAX_RELEVANT_CHARS;
+  let remaining = Math.max(200, Math.floor(maxChars));
   for (const candidate of rankRelevantMemories(native, canonical, query, currentProjectId)) {
     if (notes.length >= MAX_RELEVANT_RECORDS || remaining < 80) break;
     const note = renderRelevantMemory(candidate, remaining);
@@ -424,7 +436,9 @@ export function validateExtractionJson(text: string): ExtractionCandidate[] | nu
 export function hasDurableSignal(userText: string, _assistantText: string): boolean {
   const text = userText.toLowerCase().trim();
   if (!text || text.startsWith("/") || text.includes("important: this instruction")) return false;
-  return /\b(?:remember|my preference|i prefer|always|never|from now on|going forward|correction|we decided|decision is|standing policy|source of truth)\b/.test(text);
+  return /\b(?:remember|don't forget|my preference|i prefer|from now on|going forward|we decided|decision is|standing policy|source of truth)\b/.test(text)
+    || /\bcorrection\s*:/.test(text)
+    || /^(?:please\s+)?(?:always|never)\s+\S+/i.test(text);
 }
 
 export function buildExplicitProposal(candidate: ExtractionCandidate, context: { projectId?: string; evidenceUri?: string } = {}): MemoryProposal {

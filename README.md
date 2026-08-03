@@ -76,18 +76,20 @@ Pi-native CodeGraph wrapper for local semantic code intelligence:
 ### `pi-memory-system`
 Adds an additive Bobby canonical-memory bridge while preserving native Pi Markdown memory under `~/.pi/agent/memory/` as a resilient, read-only edge-cache and evidence source:
 - Bobby is the canonical reconciliation authority; native Markdown memories are never disabled, deleted, or directly rewritten by this extension
-- `before_agent_start` combines native records with Bobby's generated canonical manifest by exact-token relevance and project identity; active agent-safe canonical records win duplicate/supersession conflicts, with at most two records / 1200 chars injected
+- `before_agent_start` combines native records with Bobby's generated canonical manifest by exact-token relevance and project identity; active agent-safe canonical records win duplicate/supersession conflicts, with at most two records / 1200 chars injected by default
 - explicit memory operations create Bobby proposals only; deprecation targets an exact canonical record and never removes native files
 - inferred extraction runs in an isolated, tool-less Pi print child after `agent_end`; it submits pending Bobby proposals off-thread and never adds a turn or message to the main session
 - absent/malformed Bobby manifests or unavailable CLI fail open for conversation and fail closed for canonical mutation
 
-Configuration: `BOBBY_BIN`, `BOBBY_CANONICAL_MEMORY_ROOT`, and `BOBBY_PI_MEMORY_MANIFEST` select the typed `canonical-memory-client` boundary and manifest. `BOBBY_CANONICAL_MEMORY_COMMANDS_JSON` can override that one boundary for testing. Explicit apply requires the configured Bobby review actor/note receipt path; otherwise proposals remain pending.
+Configuration: `BOBBY_BIN`, `BOBBY_CANONICAL_MEMORY_ROOT`, and `BOBBY_PI_MEMORY_MANIFEST` select the typed `canonical-memory-client` boundary and manifest. `BOBBY_CANONICAL_MEMORY_COMMANDS_JSON` can override that one boundary for testing. `PI_MEMORY_AMBIENT_MAX_CHARS` directly bounds ambient injection (200–8000 characters; default 1200). Pi has no accept/apply path: explicit and inferred writes remain pending Bobby proposals.
 
 Commands/tool:
 - `/remember [type] [scope] :: text`
 - `/forget <record-id or query>`
 - `/memory-status`
-- `memory` tool: `search`, `propose`, `forget`, `status`
+- `memory_query` — bounded Bobby canonical search
+- `memory_context` — Bobby's bounded native context projection
+- `memory_propose` — pending create/deprecate proposal only
 
 ### `codex-ui-gallery`
 High-quality native Pi TUI image gallery for `codex-ui-design` outputs:

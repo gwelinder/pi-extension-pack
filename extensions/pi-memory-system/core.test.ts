@@ -3,7 +3,10 @@ import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
 import {
   LatestSingleFlightQueue,
+  ambientBudgetChars,
   buildExplicitProposal,
+  buildDeprecateProposal,
+  buildInferredProposal,
   hasDurableSignal,
   hydrateCanonicalMemory,
   isAgentSafeCanonical,
@@ -114,11 +117,21 @@ describe("proposals and extraction validation", () => {
     expect(proposal).toMatchObject({ proposalType: "create", provenance: { source: "pi-explicit" }, record: { scope: "project" } });
     const config = getBobbyConfig({ BOBBY_BIN: "bobby-test", BOBBY_CANONICAL_MEMORY_ROOT: "/tmp/canonical" } as NodeJS.ProcessEnv);
     expect(buildBobbyInvocation(config, "propose")).toEqual({ file: "bobby-test", args: ["canonical-memory-client", "--root", "/tmp/canonical"] });
+    expect(buildInferredProposal({
+      name: "inferred-validation",
+      description: "Candidate from a durable session signal",
+      type: "feedback",
+      scope: "project",
+      body: "Prefer focused validation.",
+    }).provenance.source).toBe("pi-inferred");
+    expect(buildDeprecateProposal("mem-123")?.proposalType).toBe("deprecate");
   });
 
   test("prefilters durable signals and validates bounded extraction JSON", () => {
     expect(hasDurableSignal("Please remember that I prefer focused tests.", "I will use focused tests.")).toBe(true);
+    expect(hasDurableSignal("Correction: focused tests are the standing preference.", "Understood.")).toBe(true);
     expect(hasDurableSignal("hello", "Hi there")).toBe(false);
+    expect(hasDurableSignal("Can you always explain this?", "Sure.")).toBe(false);
     expect(validateExtractionJson(JSON.stringify({ candidates: [{
       name: "focused-tests",
       description: "User prefers focused tests",
@@ -134,6 +147,13 @@ describe("proposals and extraction validation", () => {
       scope: "project",
       body: "api_key=abcdefghijklmnopqrstuvwxyz012345",
     }] }))).toBeNull();
+  });
+
+  test("ambient capsule keeps the proven character default and a direct bounded character seam", () => {
+    expect(ambientBudgetChars(undefined)).toBe(1_200);
+    expect(ambientBudgetChars("2400")).toBe(2_400);
+    expect(ambientBudgetChars("100000")).toBe(8_000);
+    expect(ambientBudgetChars("not-a-number")).toBe(1_200);
   });
 });
 
@@ -156,6 +176,13 @@ test("latest single-flight queue keeps only one latest pending job", async () =>
 
 test("extension source has no synthetic user-message extraction path", () => {
   const source = readFileSync(join(import.meta.dir, "index.ts"), "utf8");
+  const clientSource = readFileSync(join(import.meta.dir, "bobby-client.ts"), "utf8");
   expect(source).not.toMatch(/sendUserMessage/);
   expect(source).not.toMatch(/followUp/);
+  expect(source).toMatch(/name: "memory_query"/);
+  expect(source).toMatch(/name: "memory_context"/);
+  expect(source).toMatch(/name: "memory_propose"/);
+  expect(source).not.toMatch(/name: "memory"/);
+  expect(source).not.toMatch(/canonical-memory-mcp|runCanonicalMemoryMcpServer/i);
+  expect(clientSource).not.toMatch(/acceptAndApply|proposal-update|proposal-apply|EXPLICIT_APPLY/);
 });

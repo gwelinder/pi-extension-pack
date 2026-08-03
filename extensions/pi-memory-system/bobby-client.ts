@@ -10,7 +10,7 @@ import {
   proposalIsSafe,
 } from "./core.ts";
 
-export type BobbyOperation = "search" | "propose" | "proposal-update" | "proposal-apply" | "status";
+export type BobbyOperation = "search" | "context" | "propose" | "status";
 
 type CommandOverride = { command?: string; args?: string[] };
 
@@ -21,18 +21,16 @@ export type BobbyConfig = {
   timeoutMs: number;
   maxOutputChars: number;
   commands: Record<BobbyOperation, CommandOverride>;
-  review?: { actor: string; note: string };
-  applyExplicit: boolean;
 };
 
 export type BobbyInvocation = { file: string; args: string[] };
 export type BobbyResult = { ok: boolean; data?: unknown; error?: string };
+export type BobbyContext = { available: boolean; markdown: string; records: MemoryCandidate[] };
 
 const DEFAULT_COMMANDS: Record<BobbyOperation, CommandOverride> = {
   search: { command: "canonical-memory-client" },
+  context: { command: "canonical-memory-client" },
   propose: { command: "canonical-memory-client" },
-  "proposal-update": { command: "canonical-memory-client" },
-  "proposal-apply": { command: "canonical-memory-client" },
   status: { command: "canonical-memory-client" },
 };
 
@@ -74,8 +72,6 @@ export function getBobbyConfig(env: NodeJS.ProcessEnv = process.env): BobbyConfi
   for (const operation of Object.keys(DEFAULT_COMMANDS) as BobbyOperation[]) {
     commands[operation] = { ...DEFAULT_COMMANDS[operation], ...overrides[operation] };
   }
-  const actor = env.BOBBY_CANONICAL_MEMORY_REVIEW_ACTOR?.trim();
-  const note = env.BOBBY_CANONICAL_MEMORY_REVIEW_NOTE?.trim();
   const canonicalMemoryRoot = env.BOBBY_CANONICAL_MEMORY_ROOT?.trim()
     || join(homedir(), "Documents", "ceo-personal-os", "knowledge", "living", "memory");
   return {
@@ -85,8 +81,6 @@ export function getBobbyConfig(env: NodeJS.ProcessEnv = process.env): BobbyConfi
     timeoutMs: boundedNumber(env.BOBBY_CANONICAL_MEMORY_TIMEOUT_MS, 2_500, 250, 30_000),
     maxOutputChars: boundedNumber(env.BOBBY_CANONICAL_MEMORY_MAX_OUTPUT_CHARS, 64_000, 1_024, 1_000_000),
     commands,
-    review: actor && note ? { actor, note } : undefined,
-    applyExplicit: env.BOBBY_CANONICAL_MEMORY_EXPLICIT_APPLY === "1",
   };
 }
 
@@ -243,6 +237,19 @@ export class BobbyClient {
     return result.ok ? { available: true, records: recordsFromPayload(result.data) } : { available: false, records: [] };
   }
 
+  /** Native Pi names the Bobby search verb query; Bobby remains the retrieval authority. */
+  async query(query: string, limit = 8, signal?: AbortSignal, projectId?: string): Promise<{ available: boolean; records: MemoryCandidate[] }> {
+    return this.search(query, limit, signal, projectId);
+  }
+
+  /** Context is Bobby's native bounded canonical projection. Pi never renders a second projection. */
+  async context(task: string, maxChars = 1_500, signal?: AbortSignal, projectId?: string): Promise<BobbyContext> {
+    const result = await runBobby(this.config, "context", { task, maxChars, projectId, consumer: "pi" }, signal);
+    if (!result.ok) return { available: false, markdown: "", records: [] };
+    const data = result.data && typeof result.data === "object" && !Array.isArray(result.data) ? result.data as Record<string, unknown> : {};
+    return { available: true, markdown: typeof data.markdown === "string" ? data.markdown : "", records: recordsFromPayload(data) };
+  }
+
   async status(signal?: AbortSignal): Promise<BobbyResult> {
     return await runBobby(this.config, "status", { consumer: "pi" }, signal);
   }
@@ -253,21 +260,4 @@ export class BobbyClient {
     return result.ok ? { ok: true, proposalId: proposalId(result.data) } : { ok: false, error: result.error };
   }
 
-  async acceptAndApply(proposalIdValue: string, signal?: AbortSignal): Promise<{ applied: boolean; error?: string }> {
-    const review = this.config.review;
-    if (!this.config.applyExplicit || !review) return { applied: false, error: "Bobby review actor/note contract is not configured; proposal remains pending." };
-    const accepted = await runBobby(this.config, "proposal-update", {
-      proposalId: proposalIdValue,
-      status: "accepted",
-      review: { actor: review.actor, note: review.note },
-      consumer: "pi",
-    }, signal);
-    if (!accepted.ok) return { applied: false, error: accepted.error };
-    const applied = await runBobby(this.config, "proposal-apply", {
-      proposalId: proposalIdValue,
-      review: { actor: review.actor, note: review.note },
-      consumer: "pi",
-    }, signal);
-    return applied.ok ? { applied: true } : { applied: false, error: applied.error };
-  }
 }

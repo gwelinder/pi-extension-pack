@@ -13,13 +13,13 @@ import {
   buildDeprecateProposal,
   buildExplicitProposal,
   buildInferredProposal,
+  ambientBudgetChars,
   contentHash,
   hasDurableSignal,
   hydrateCanonicalMemory,
   parseBobbyManifest,
   parseNativeMemory,
   parseRememberInput,
-  rankRelevantMemories,
   selectRelevantMemoryNotes,
 } from "./core.ts";
 import { BobbyClient, getBobbyConfig, readBobbyManifest } from "./bobby-client.ts";
@@ -177,7 +177,7 @@ function memoryPrompt(notes: string[]): string {
     "",
     "Bobby canonical memory is the reconciliation authority. Native Pi Markdown memories remain a resilient read-only edge cache and evidence source; do not disable, delete, or write them directly.",
     "Use persistent memory only for durable facts, preferences, feedback, rationale/constraints, and external references not derivable from the repository. Current evidence wins over memory.",
-    "Use the memory tool for explicit search, proposals, forget requests, and status. Canonical mutations are proposals through Bobby; never edit canonical or native memory Markdown directly.",
+    "Use memory_query and memory_context for read-only Bobby retrieval, and memory_propose for explicit durable proposals. Canonical mutations are proposals through Bobby; never edit canonical or native memory Markdown directly.",
     ...(notes.length ? ["", "## Relevant memory", ...notes] : []),
   ].join("\n");
 }
@@ -228,14 +228,11 @@ function createSessionState(): SessionState {
   };
 }
 
-async function submitExplicitProposal(candidate: ExtractionCandidate, client: BobbyClient, context: { projectId?: string; evidenceUri?: string } = {}, signal?: AbortSignal, allowReviewedApply = false): Promise<string> {
+async function submitExplicitProposal(candidate: ExtractionCandidate, client: BobbyClient, context: { projectId?: string; evidenceUri?: string } = {}, signal?: AbortSignal): Promise<string> {
   const proposed = await client.propose(buildExplicitProposal(candidate, context), signal);
   if (!proposed.ok) return `Bobby unavailable; no canonical mutation was made (${proposed.error || "proposal failed"}).`;
   if (!proposed.proposalId) return "Bobby accepted the proposal, but returned no proposal ID; it remains pending for review.";
-  if (!allowReviewedApply) return `Canonical proposal ${proposed.proposalId} is pending Bobby review.`;
-  const approval = await client.acceptAndApply(proposed.proposalId, signal);
-  if (approval.applied) return `Canonical proposal ${proposed.proposalId} was accepted and applied through Bobby's review receipt.`;
-  return `Canonical proposal ${proposed.proposalId} is pending. ${approval.error || "It was not applied."}`;
+  return `Canonical proposal ${proposed.proposalId} is pending Bobby review.`;
 }
 
 async function chooseForgetTarget(query: string, client: BobbyClient, ctx: ExtensionCommandContext, projectId: string): Promise<string | undefined> {
@@ -322,7 +319,7 @@ export default function piMemorySystem(pi: ExtensionAPI) {
     const config = getBobbyConfig();
     const manifest = readBobbyManifest(config);
     const notes = state.currentRunUserText
-      ? selectRelevantMemoryNotes(listNativeCandidates(paths), listCanonicalCandidates(manifest), state.currentRunUserText, paths.projectSlug)
+      ? selectRelevantMemoryNotes(listNativeCandidates(paths), listCanonicalCandidates(manifest), state.currentRunUserText, paths.projectSlug, ambientBudgetChars())
       : [];
     return { systemPrompt: `${event.systemPrompt}\n\n${memoryPrompt(notes)}` };
   });
@@ -369,59 +366,75 @@ export default function piMemorySystem(pi: ExtensionAPI) {
   });
 
   pi.registerTool({
-    name: "memory",
-    label: "Memory",
-    description: "Search native edge-cache and Bobby canonical memory, propose explicit durable memory, deprecate an exact canonical record, or show memory status.",
-    promptSnippet: "Search or propose canonical durable memory",
-    promptGuidelines: ["Use memory for explicit durable-memory requests. Use memory forget only with an exact canonical record ID returned by memory search; it creates a Bobby deprecate proposal rather than deleting files."],
+    name: "memory_query",
+    label: "Memory query",
+    description: "Read-only bounded query against Bobby canonical memory; native Pi Markdown remains a read-only edge cache for ambient hydration only.",
+    promptSnippet: "Query Bobby canonical memory",
+    promptGuidelines: ["Use for a focused memory lookup. Do not treat native edge-cache results as canonical without checking Bobby."],
     parameters: Type.Object({
-      action: StringEnum(["search", "propose", "forget", "status"] as const),
-      query: Type.Optional(Type.String({ maxLength: 2_000 })),
+      query: Type.String({ minLength: 1, maxLength: 2_000 }),
+      project_id: Type.Optional(Type.String({ maxLength: 101 })),
+      limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 12 })),
+    }),
+    async execute(_toolCallId, params, signal) {
+      const client = new BobbyClient(getBobbyConfig());
+      const bobby = await client.query(params.query.trim(), params.limit || 8, signal, params.project_id);
+      const text = bobby.records.length
+        ? bobby.records.map((record) => `canonical ${record.id} — ${record.description}`).join("\n")
+        : "No relevant canonical memory records found.";
+      return { content: [{ type: "text", text }], details: { bobbyAvailable: bobby.available, records: bobby.records.map((record) => ({ id: record.id, source: record.source, description: record.description })) } };
+    },
+  });
+
+  pi.registerTool({
+    name: "memory_context",
+    label: "Memory context",
+    description: "Read-only on-demand task context projected from Bobby canonical memory; it does not enlarge ambient injection.",
+    promptSnippet: "Retrieve deeper Bobby task context",
+    parameters: Type.Object({
+      task: Type.String({ minLength: 1, maxLength: 4_000 }),
+      project_id: Type.Optional(Type.String({ maxLength: 101 })),
+      max_chars: Type.Optional(Type.Integer({ minimum: 200, maximum: 3_600 })),
+    }),
+    async execute(_toolCallId, params, signal) {
+      const client = new BobbyClient(getBobbyConfig());
+      const context = await client.context(params.task.trim(), params.max_chars || 1_500, signal, params.project_id);
+      return { content: [{ type: "text", text: context.markdown || "No relevant canonical memory context found." }], details: { bobbyAvailable: context.available, records: context.records.map((record) => ({ id: record.id, source: record.source, description: record.description })) } };
+    },
+  });
+
+  pi.registerTool({
+    name: "memory_propose",
+    label: "Memory propose",
+    description: "Create a pending Bobby proposal for explicit durable memory or deprecate an exact canonical record; never applies canonical truth.",
+    promptSnippet: "Propose canonical durable memory",
+    promptGuidelines: ["Use only for an explicit durable owner correction/remember request. For deprecation, provide an exact canonical record_id from memory_query."],
+    parameters: Type.Object({
       content: Type.Optional(Type.String({ maxLength: 2_000 })),
       type: Type.Optional(StringEnum(["user", "feedback", "project", "reference"] as const)),
       scope: Type.Optional(StringEnum(["user", "private", "project"] as const)),
-      recordId: Type.Optional(Type.String({ maxLength: 300 })),
+      record_id: Type.Optional(Type.String({ maxLength: 300 })),
     }),
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      const state = getState(ctx.sessionManager.getSessionId());
       const client = new BobbyClient(getBobbyConfig());
-      if (params.action === "search") {
-        const query = params.query?.trim();
-        if (!query) return { content: [{ type: "text", text: "Provide a search query." }], details: { records: [] } };
-        const paths = await getMemoryPaths(pi, ctx.cwd);
-        const manifest = readBobbyManifest(client.config);
-        const bobby = await client.search(query, 8, signal, paths.projectSlug);
-        const canonical = [...listCanonicalCandidates(manifest), ...bobby.records.filter((record) => !manifest?.records.some((local) => local.id === record.id))];
-        const records = rankRelevantMemories(listNativeCandidates(paths), canonical, query, paths.projectSlug).slice(0, 8);
-        const text = records.length
-          ? records.map((record) => `${record.source === "canonical" ? "canonical" : "native"} ${record.id} — ${record.description}`).join("\n")
-          : "No relevant memory records found.";
-        return { content: [{ type: "text", text }], details: { bobbyAvailable: bobby.available, records: records.map((record) => ({ id: record.id, source: record.source, description: record.description })) } };
-      }
-      if (params.action === "propose") {
-        const raw = params.content || params.query || "";
-        const candidate = parseRememberInput(`${params.type || ""} ${params.scope || ""} :: ${raw}`);
-        if (!candidate) return { content: [{ type: "text", text: "Provide durable memory content to propose." }], details: { pending: false } };
-        try {
-          const paths = await getMemoryPaths(pi, ctx.cwd);
-          const text = await submitExplicitProposal(candidate, client, {
-            projectId: paths.projectSlug,
-            evidenceUri: `pi-session://${ctx.sessionManager.getSessionId()}/explicit`,
-          }, signal);
-          return { content: [{ type: "text", text }], details: { pending: text.includes("pending") } };
-        } catch (error) {
-          return { content: [{ type: "text", text: error instanceof Error ? error.message : "Memory proposal rejected locally." }], details: { pending: false } };
-        }
-      }
-      if (params.action === "forget") {
-        const proposal = buildDeprecateProposal(params.recordId || "");
-        if (!proposal) return { content: [{ type: "text", text: "Use memory search first, then provide its exact canonical recordId." }], details: { pending: false } };
+      if (params.record_id) {
+        const proposal = buildDeprecateProposal(params.record_id);
+        if (!proposal) return { content: [{ type: "text", text: "Provide an exact canonical record_id from memory_query." }], details: { pending: false } };
         const result = await client.propose(proposal, signal);
         return { content: [{ type: "text", text: result.ok ? `Deprecate proposal ${result.proposalId || "submitted"} is pending Bobby review.` : `Bobby unavailable; no canonical mutation was made (${result.error || "proposal failed"}).` }], details: { proposalId: result.proposalId, pending: result.ok } };
       }
-      const manifest = readBobbyManifest(client.config);
-      const bobby = await client.status(signal);
-      return { content: [{ type: "text", text: describeStatus(state, manifest, bobby.ok) }], details: { bobbyAvailable: bobby.ok, manifestAvailable: Boolean(manifest) } };
+      const candidate = parseRememberInput(`${params.type || ""} ${params.scope || ""} :: ${params.content || ""}`);
+      if (!candidate) return { content: [{ type: "text", text: "Provide durable memory content to propose." }], details: { pending: false } };
+      try {
+        const paths = await getMemoryPaths(pi, ctx.cwd);
+        const text = await submitExplicitProposal(candidate, client, {
+          projectId: paths.projectSlug,
+          evidenceUri: `pi-session://${ctx.sessionManager.getSessionId()}/explicit`,
+        }, signal);
+        return { content: [{ type: "text", text }], details: { pending: text.includes("pending") } };
+      } catch (error) {
+        return { content: [{ type: "text", text: error instanceof Error ? error.message : "Memory proposal rejected locally." }], details: { pending: false } };
+      }
     },
   });
 
@@ -443,7 +456,7 @@ export default function piMemorySystem(pi: ExtensionAPI) {
         notify(ctx, await submitExplicitProposal(candidate, new BobbyClient(getBobbyConfig()), {
           projectId: paths.projectSlug,
           evidenceUri: `pi-session://${ctx.sessionManager.getSessionId()}/explicit`,
-        }, undefined, true));
+        }));
       } catch (error) {
         notify(ctx, error instanceof Error ? error.message : "Memory proposal rejected locally.", "warning");
       }
