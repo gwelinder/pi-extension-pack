@@ -28,10 +28,10 @@ export type BobbyResult = { ok: boolean; data?: unknown; error?: string };
 export type BobbyContext = { available: boolean; markdown: string; records: MemoryCandidate[] };
 
 const DEFAULT_COMMANDS: Record<BobbyOperation, CommandOverride> = {
-  search: { command: "canonical-memory-client" },
-  context: { command: "canonical-memory-client" },
-  propose: { command: "canonical-memory-client" },
-  status: { command: "canonical-memory-client" },
+  search: { command: "ops", args: ["canonical-memory-client"] },
+  context: { command: "ops", args: ["canonical-memory-client"] },
+  propose: { command: "ops", args: ["canonical-memory-client"] },
+  status: { command: "ops", args: ["canonical-memory-client"] },
 };
 
 function boundedNumber(value: string | undefined, fallback: number, min: number, max: number): number {
@@ -75,7 +75,7 @@ export function getBobbyConfig(env: NodeJS.ProcessEnv = process.env): BobbyConfi
   const canonicalMemoryRoot = env.BOBBY_CANONICAL_MEMORY_ROOT?.trim()
     || join(homedir(), "Documents", "ceo-personal-os", "knowledge", "living", "memory");
   return {
-    bin: env.BOBBY_BIN?.trim() || join(homedir(), "code", "bobby", "bin", "bobby"),
+    bin: env.BOBBY_BIN?.trim() || join(homedir(), ".local", "bin", "bobby"),
     canonicalMemoryRoot,
     manifestPath: env.BOBBY_PI_MEMORY_MANIFEST?.trim() || join(canonicalMemoryRoot, "manifest.json"),
     timeoutMs: boundedNumber(env.BOBBY_CANONICAL_MEMORY_TIMEOUT_MS, 2_500, 250, 30_000),
