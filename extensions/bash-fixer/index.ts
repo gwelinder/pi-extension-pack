@@ -765,20 +765,55 @@ function hasMutatingNpmCommand(command: string): string | undefined {
   return undefined;
 }
 
+function shellCommandSegments(command: string): string[] {
+  const segments: string[] = [];
+  let words: string[] = [];
+  const flush = () => {
+    if (words.length > 0) segments.push(words.join(" "));
+    words = [];
+  };
+
+  for (let index = 0; index < command.length;) {
+    const char = command[index]!;
+    if (/\s/.test(char)) {
+      index++;
+      continue;
+    }
+    if (";|&<>".includes(char)) {
+      flush();
+      index++;
+      continue;
+    }
+    const word = readShellWord(command, index);
+    if (!word) {
+      index++;
+      continue;
+    }
+    words.push(word.value);
+    index = word.end;
+  }
+  flush();
+  return segments;
+}
+
 function hasUnsafeJsonlRg(command: string): boolean {
   if (hasHereDoc(command)) return false;
-  if (!/(?:^|[\n;&|()]\s*)rg\b/.test(command)) return false;
-  if (/\brg\s+--files\b|\b--files\b|(?:^|\s)-(?:l|c)\b|\b--(?:files-with-matches|count|count-matches)\b/.test(command)) return false;
-  if (/\b--max-columns(?:=|\s+)\d+\b/.test(command)) return false;
-  return /\.jsonl\b|\.pi\/agent\/sessions|\.codex\/sessions|\.claude\/projects|\.openclaw\/.+\.jsonl/.test(command);
+  return shellCommandSegments(command).some((segment) => {
+    if (!/^rg\b/.test(segment)) return false;
+    if (/\brg\s+--files\b|\b--files\b|(?:^|\s)-(?:l|c)\b|\b--(?:files-with-matches|count|count-matches)\b/.test(segment)) return false;
+    if (/\b--max-columns(?:=|\s+)\d+\b/.test(segment)) return false;
+    return /\.jsonl\b|\.pi\/agent\/sessions|\.codex\/sessions|\.claude\/projects|\.openclaw\/.+\.jsonl/.test(segment);
+  });
 }
 
 function hasUnsafePiSessionRg(command: string): boolean {
   if (hasHereDoc(command)) return false;
-  if (!/(?:^|[\n;&|()]\s*)rg\b/.test(command)) return false;
-  if (!/(?:~|\$HOME|\/Users\/gfw)\/\.pi\/agent\/sessions|\.pi\/agent\/sessions/.test(command)) return false;
-  if (/\brg\s+--files\b|\b--files\b|(?:^|\s)-(?:l|c)\b|\b--(?:files-with-matches|count|count-matches)\b/.test(command)) return false;
-  return !/\b--max-columns(?:=|\s+)\d+\b/.test(command);
+  return shellCommandSegments(command).some((segment) => {
+    if (!/^rg\b/.test(segment)) return false;
+    if (!/(?:~|\$HOME|\/Users\/gfw)\/\.pi\/agent\/sessions|\.pi\/agent\/sessions/.test(segment)) return false;
+    if (/\brg\s+--files\b|\b--files\b|(?:^|\s)-(?:l|c)\b|\b--(?:files-with-matches|count|count-matches)\b/.test(segment)) return false;
+    return !/\b--max-columns(?:=|\s+)\d+\b/.test(segment);
+  });
 }
 
 const RG_SHORT_OPTIONS_WITH_VALUE = new Set(["A", "B", "C", "d", "e", "E", "f", "g", "j", "m", "M", "r", "t", "T"]);
