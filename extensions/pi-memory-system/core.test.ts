@@ -1,4 +1,5 @@
-import { readFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
 import {
@@ -16,7 +17,7 @@ import {
   selectRelevantMemoryNotes,
   validateExtractionJson,
 } from "./core.ts";
-import { buildBobbyInvocation, getBobbyConfig } from "./bobby-client.ts";
+import { BobbyClient, buildBobbyInvocation, getBobbyConfig } from "./bobby-client.ts";
 
 const canonical = (overrides: Record<string, unknown> = {}) => ({
   id: "canon-preferences",
@@ -115,8 +116,11 @@ describe("proposals and extraction validation", () => {
       body: "Run focused validation after non-trivial changes.",
     });
     expect(proposal).toMatchObject({ proposalType: "create", provenance: { source: "pi-explicit" }, record: { scope: "project" } });
-    const config = getBobbyConfig({ BOBBY_BIN: "bobby-test", BOBBY_CANONICAL_MEMORY_ROOT: "/tmp/canonical" } as NodeJS.ProcessEnv);
-    expect(buildBobbyInvocation(config, "propose")).toEqual({ file: "bobby-test", args: ["canonical-memory-client", "--root", "/tmp/canonical"] });
+    const config = getBobbyConfig({ BOBBY_CANONICAL_MEMORY_ROOT: "/tmp/canonical" } as NodeJS.ProcessEnv);
+    expect(buildBobbyInvocation(config, "propose")).toEqual({
+      file: join(homedir(), ".local", "bin", "bobby"),
+      args: ["ops", "canonical-memory-client", "--root", "/tmp/canonical"],
+    });
     expect(buildInferredProposal({
       name: "inferred-validation",
       description: "Candidate from a durable session signal",
@@ -125,6 +129,48 @@ describe("proposals and extraction validation", () => {
       body: "Prefer focused validation.",
     }).provenance.source).toBe("pi-inferred");
     expect(buildDeprecateProposal("mem-123")?.proposalType).toBe("deprecate");
+  });
+
+  test("maps structured proposal success and error responses through the authoritative argv", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "pi-memory-bobby-"));
+    const makeBobby = (name: string, response: string) => {
+      const path = join(dir, name);
+      writeFileSync(path, `#!/bin/sh
+if [ "$#" -ne 4 ] || [ "$1" != "ops" ] || [ "$2" != "canonical-memory-client" ] || [ "$3" != "--root" ] || [ "$4" != "/tmp/canonical" ]; then
+  printf '%s\\n' '{"ok":false,"error":"unexpected argv"}'
+  exit 0
+fi
+request=$(cat)
+case "$request" in
+  *'"operation":"propose"'*) printf '%s\\n' '${response}' ;;
+  *) printf '%s\\n' '{"ok":false,"error":"unexpected operation"}' ;;
+esac
+`);
+      chmodSync(path, 0o755);
+      return path;
+    };
+    const proposal = buildExplicitProposal({
+      name: "feedback-validation",
+      description: "Run focused validation",
+      type: "feedback",
+      scope: "project",
+      body: "Run focused validation after non-trivial changes.",
+    });
+    try {
+      const success = new BobbyClient(getBobbyConfig({
+        BOBBY_BIN: makeBobby("success", '{"ok":true,"data":{"proposalId":"proposal-123"}}'),
+        BOBBY_CANONICAL_MEMORY_ROOT: "/tmp/canonical",
+      } as NodeJS.ProcessEnv));
+      const failure = new BobbyClient(getBobbyConfig({
+        BOBBY_BIN: makeBobby("failure", '{"ok":false,"error":"proposal rejected by Bobby"}'),
+        BOBBY_CANONICAL_MEMORY_ROOT: "/tmp/canonical",
+      } as NodeJS.ProcessEnv));
+
+      expect(await success.propose(proposal)).toEqual({ ok: true, proposalId: "proposal-123" });
+      expect(await failure.propose(proposal)).toEqual({ ok: false, error: "proposal rejected by Bobby" });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   test("prefilters durable signals and validates bounded extraction JSON", () => {
@@ -185,4 +231,5 @@ test("extension source has no synthetic user-message extraction path", () => {
   expect(source).not.toMatch(/name: "memory"/);
   expect(source).not.toMatch(/canonical-memory-mcp|runCanonicalMemoryMcpServer/i);
   expect(clientSource).not.toMatch(/acceptAndApply|proposal-update|proposal-apply|EXPLICIT_APPLY/);
+  expect(clientSource).not.toMatch(/command:\s*"canonical-memory-client"/);
 });
