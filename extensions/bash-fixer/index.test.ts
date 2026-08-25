@@ -51,3 +51,17 @@ test("allows stdin-only rg filters while blocking broad rg path operands", () =>
     expect(runToolCall(command)).toMatchObject({ block: true });
   }
 });
+
+test("scopes JSONL protections to the rg command segment", () => {
+  expect(runToolCall(
+    `python3 -c 'print("/tmp/audit.jsonl")'; ps -axo pid,lstart,command | rg "Google Chrome|playwriter|dev-browser|node.*daemon|chromium" | head -80`,
+  )).toBeUndefined();
+
+  expect(runToolCall(
+    `python3 -c 'print("inventory")'; rg error /tmp/audit.jsonl | head -80`,
+  )).toMatchObject({ block: true });
+
+  expect(runToolCall(
+    `printf session; rg error /Users/gfw/.pi/agent/sessions/run.jsonl`,
+  )).toMatchObject({ block: true });
+});
