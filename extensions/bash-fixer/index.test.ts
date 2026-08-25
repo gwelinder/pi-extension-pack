@@ -34,6 +34,7 @@ afterAll(() => rmSync(agentDir, { recursive: true, force: true }));
 test("allows stdin-only rg filters while blocking broad rg path operands", () => {
   for (const command of [
     "ps -axo pid,lstart,command | rg -F '/Users/gfw/.herdr/worktrees'",
+    "ps -axo pid,lstart,command | rg --fixed-strings -- '--user-data-dir=/Users/gfw/.dev-browser/browsers/'",
     "lsof -nP | rg --fixed-strings /Users/gfw | awk '{print $1}'",
     "rg -F /Users/gfw",
   ]) {
@@ -52,6 +53,17 @@ test("allows stdin-only rg filters while blocking broad rg path operands", () =>
   }
 });
 
+test("blocks broad roots in compound rg commands", () => {
+  for (const command of [
+    "if true; then :; else rg PATTERN /Users/gfw; fi",
+    "{ rg PATTERN /Users/gfw; }",
+    "if true; then rg PATTERN /Users/gfw; fi",
+    "(rg PATTERN /Users/gfw)",
+  ]) {
+    expect(runToolCall(command)).toMatchObject({ block: true });
+  }
+});
+
 test("scopes JSONL protections to the rg command segment", () => {
   expect(runToolCall(
     `python3 -c 'print("/tmp/audit.jsonl")'; ps -axo pid,lstart,command | rg "Google Chrome|playwriter|dev-browser|node.*daemon|chromium" | head -80`,
@@ -64,4 +76,13 @@ test("scopes JSONL protections to the rg command segment", () => {
   expect(runToolCall(
     `printf session; rg error /Users/gfw/.pi/agent/sessions/run.jsonl`,
   )).toMatchObject({ block: true });
+
+  for (const command of [
+    "env rg error /tmp/audit.jsonl",
+    "command rg error /tmp/audit.jsonl",
+    "RG_CONFIG_PATH=/tmp/rg.conf rg error /tmp/audit.jsonl",
+    "env rg error /Users/gfw/.pi/agent/sessions/run.jsonl",
+  ]) {
+    expect(runToolCall(command)).toMatchObject({ block: true });
+  }
 });
