@@ -1,7 +1,6 @@
 import { execFile, spawn } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
-import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
@@ -9,6 +8,10 @@ import { defineTool, type ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { StringEnum } from '@earendil-works/pi-ai';
 import { Text } from '@earendil-works/pi-tui';
 import { Type } from 'typebox';
+import {
+  resolveCodeGraphExecutable,
+  type CodeGraphExecutable,
+} from './executable';
 
 const execFileAsync = promisify(execFile);
 const DEFAULT_TIMEOUT_MS = 120_000;
@@ -21,7 +24,6 @@ const ARTIFACT_ROOT = path.join(
   'artifacts',
   'codegraph'
 );
-const requireFromExtension = createRequire(import.meta.url);
 
 type CodeGraphAction =
   | 'context'
@@ -69,6 +71,8 @@ type CodeGraphDetails = {
   action: CodeGraphAction;
   projectPath: string;
   command: string[];
+  executablePath: string;
+  executableSource: CodeGraphExecutable['source'];
   synced: boolean;
   syncOutput?: string;
   elapsedMs: number;
@@ -115,43 +119,6 @@ function findCodeGraphProject(startPath: string): string | undefined {
 function resolveProjectPath(input: string | undefined, cwd: string): string {
   if (input?.trim()) return path.resolve(cwd, expandUserPath(input.trim()));
   return findCodeGraphProject(cwd) ?? path.resolve(cwd);
-}
-
-function packageCodeGraphBin(): string | undefined {
-  try {
-    const packageJsonPath = requireFromExtension.resolve(
-      '@colbymchenry/codegraph/package.json'
-    );
-    const packageJson = JSON.parse(
-      fs.readFileSync(packageJsonPath, 'utf8')
-    ) as { bin?: string | Record<string, string> };
-    const bin =
-      typeof packageJson.bin === 'string'
-        ? packageJson.bin
-        : packageJson.bin?.codegraph;
-    if (!bin) return;
-    const candidate = path.join(path.dirname(packageJsonPath), bin);
-    return fs.existsSync(candidate) ? candidate : undefined;
-  } catch {
-    return;
-  }
-}
-
-function ancestorBin(name: string): string | undefined {
-  let current = typeof __dirname === 'string' ? __dirname : process.cwd();
-  for (;;) {
-    const candidate = path.join(current, 'node_modules', '.bin', name);
-    if (fs.existsSync(candidate)) return candidate;
-    const parent = path.dirname(current);
-    if (parent === current) return;
-    current = parent;
-  }
-}
-
-function resolveCodeGraphBin(): string {
-  if (process.env.PI_CODEGRAPH_BIN?.trim())
-    return process.env.PI_CODEGRAPH_BIN.trim();
-  return packageCodeGraphBin() ?? ancestorBin('codegraph') ?? 'codegraph';
 }
 
 function requireString(value: string | undefined, name: string): string {
@@ -330,11 +297,12 @@ function commandErrorMessage(error: unknown): string {
 }
 
 async function runCodeGraph(
+  executable: string,
   args: string[],
   projectPath: string,
   signal?: AbortSignal
 ): Promise<string> {
-  const result = await execFileAsync(resolveCodeGraphBin(), args, {
+  const result = await execFileAsync(executable, args, {
     cwd: projectPath,
     timeout: DEFAULT_TIMEOUT_MS,
     maxBuffer: 16 * 1024 * 1024,
@@ -435,6 +403,7 @@ function parseMcpLines(buffer: string, state: McpRunState): string {
 }
 
 function runCodeGraphMcpTool(
+  executable: string,
   toolName: string,
   input: Record<string, unknown>,
   projectPath: string,
@@ -442,7 +411,7 @@ function runCodeGraphMcpTool(
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     const child = spawn(
-      resolveCodeGraphBin(),
+      executable,
       ['serve', '--mcp', '--path', projectPath, '--no-watch'],
       {
         cwd: projectPath,
@@ -696,6 +665,13 @@ const codegraphTool = defineTool({
     const started = Date.now();
     const action = params.action;
     const projectPath = resolveProjectPath(params.projectPath, ctx.cwd);
+    const executable = resolveCodeGraphExecutable();
+    const executableDetails = {
+      action,
+      projectPath,
+      executablePath: executable.path,
+      executableSource: executable.source,
+    };
 
     if (!fs.existsSync(projectPath)) {
       return {
@@ -703,10 +679,10 @@ const codegraphTool = defineTool({
         content: [
           {
             type: 'text',
-            text: `CodeGraph project path does not exist: ${projectPath}`,
+            text: `CodeGraph project path does not exist: ${projectPath}. Executable: ${executable.path} (${executable.source})`,
           },
         ],
-        details: { action, projectPath },
+        details: executableDetails,
       };
     }
 
@@ -719,10 +695,10 @@ const codegraphTool = defineTool({
         content: [
           {
             type: 'text',
-            text: `No CodeGraph index found in ${projectPath}. Run codegraph action=init with index=true, or run: codegraph init -i`,
+            text: `No CodeGraph index found in ${projectPath}. Executable: ${executable.path} (${executable.source}). Run codegraph action=init with index=true, or run: codegraph init -i`,
           },
         ],
-        details: { action, projectPath },
+        details: executableDetails,
       };
     }
 
@@ -732,6 +708,7 @@ const codegraphTool = defineTool({
     try {
       if (shouldAutoSync(params)) {
         syncOutput = await runCodeGraph(
+          executable.path,
           ['sync', '--quiet'],
           projectPath,
           signal
@@ -752,18 +729,20 @@ const codegraphTool = defineTool({
         : buildArgs(params, projectPath);
       const output = toolName
         ? await runCodeGraphMcpTool(
+            executable.path,
             toolName,
             buildMcpInput(params),
             projectPath,
             signal
           )
-        : await runCodeGraph(args, projectPath, signal);
+        : await runCodeGraph(executable.path, args, projectPath, signal);
       const fullOutput = [
         `# CodeGraph ${action}`,
         `Project: ${projectPath}`,
         synced
           ? 'Index: synced before query'
           : 'Index: not synced by this call',
+        `Executable: ${executable.path} (${executable.source})`,
         '',
         output || '(no output)',
       ].join('\n');
@@ -780,7 +759,9 @@ const codegraphTool = defineTool({
       const details: CodeGraphDetails = {
         action,
         projectPath,
-        command: [resolveCodeGraphBin(), ...args],
+        command: [executable.path, ...args],
+        executablePath: executable.path,
+        executableSource: executable.source,
         synced,
         syncOutput,
         elapsedMs: Date.now() - started,
@@ -803,7 +784,7 @@ const codegraphTool = defineTool({
         content: [
           {
             type: 'text',
-            text: `CodeGraph ${action} failed for ${projectPath}: ${message}`,
+            text: `CodeGraph ${action} failed for ${projectPath} using ${executable.path} (${executable.source}): ${message}`,
           },
         ],
         details: {
@@ -812,6 +793,8 @@ const codegraphTool = defineTool({
           synced,
           syncOutput,
           elapsedMs: Date.now() - started,
+          executablePath: executable.path,
+          executableSource: executable.source,
           error: message,
         },
       };

@@ -97,7 +97,7 @@ Retired extensions are sunset and no longer part of package defaults. If you exp
 
 ### CodeGraph only
 
-Use this when you only want the Pi-native `codegraph` tool. The package installs `@colbymchenry/codegraph`; initialize each repo with `codegraph init -i` or ask Pi to run the tool's `init` action.
+Use this when you only want the Pi-native `codegraph` tool. The package installs `@colbymchenry/codegraph`; initialize each repo with `codegraph init -i` or ask Pi to run the tool's `init` action. The extension resolves its package-owned CLI before looking for a bare command on `PATH`, so this works in ordinary linked worktrees.
 
 ```json
 {
@@ -112,6 +112,35 @@ Use this when you only want the Pi-native `codegraph` tool. The package installs
   ]
 }
 ```
+
+#### Global and project settings
+
+Keep one canonical package source. Pi identifies matching npm/git package
+sources across global and project settings, retains the project entry, and
+loads the selected extension once. That gives project settings deterministic
+precedence without a duplicate tool registration.
+
+For example, it is valid to use the same package source in both
+`~/.pi/agent/settings.json` and `.pi/settings.json`:
+
+```json
+{
+  "packages": [
+    {
+      "source": "git:github.com/gwelinder/pi-extension-pack",
+      "extensions": ["extensions/codegraph/**"],
+      "skills": [],
+      "prompts": [],
+      "themes": []
+    }
+  ]
+}
+```
+
+Do not add a copied `codegraph` extension under `.pi/extensions/` alongside
+this package selection. It is a non-identical extension path. Pi surfaces the
+duplicate tool as a conflict and uses the first registration; fix the settings
+instead of relying on that precedence.
 
 ### Frontend/UI workflow only
 
