@@ -698,15 +698,54 @@ function hasCurlPollingLoop(command: string): boolean {
   );
 }
 
+function hasShellPipelineOperator(command: string): boolean {
+  let quote: "'" | '"' | undefined;
+  let escaped = false;
+
+  for (let index = 0; index < command.length; index++) {
+    const char = command[index]!;
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (quote) {
+      if (quote === '"' && char === "\\") {
+        escaped = true;
+        continue;
+      }
+      if (char === quote) quote = undefined;
+      continue;
+    }
+    if (char === "\\") {
+      escaped = true;
+      continue;
+    }
+    if (char === "'" || char === '"') {
+      quote = char;
+      continue;
+    }
+    if (char === "|" && command[index + 1] !== "|") return true;
+  }
+
+  return false;
+}
+
 function hasOutputTruncation(command: string): boolean {
-  return parsePipeline(command)?.some(isPotentialOutputTruncatorStage) ?? false;
+  if (!hasShellPipelineOperator(command)) return false;
+  const pipeline = parsePipeline(command);
+  if (pipeline) return pipeline.some(isPotentialOutputTruncatorStage);
+  return shellCommandSegments(command).some(isPotentialOutputTruncatorStage) || /[`$]/.test(command);
 }
 
 function hasValidationOutputTruncation(command: string): boolean {
+  if (!hasShellPipelineOperator(command)) return false;
   const pipeline = parsePipeline(command);
-  return pipeline?.some((stage, index) =>
+  if (pipeline) return pipeline.some((stage, index) =>
     isValidationCommand(stage) && pipeline.slice(index + 1).some(isPotentialOutputTruncatorStage)
-  ) ?? false;
+  );
+
+  const stages = shellCommandSegments(command);
+  return stages.some(isValidationCommand) && stages.some(isPotentialOutputTruncatorStage);
 }
 
 function hasExternalCurlWithoutRobustness(command: string): boolean {
@@ -815,6 +854,12 @@ const ENV_OPTIONS_WITHOUT_OPERAND = new Set(["-i", "--ignore-environment", "-0",
 function commandExecutableIndex(words: ShellWord[]): number {
   let index = 0;
   while (/^[A-Za-z_][A-Za-z0-9_]*=/.test(words[index]?.value ?? "")) index++;
+
+  if (words[index]?.value === "command") {
+    index++;
+    if (words[index]?.value?.startsWith("-")) return -1;
+  }
+
   if (words[index]?.value === "env") {
     index++;
     while (index < words.length) {
@@ -840,6 +885,7 @@ function commandExecutableIndex(words: ShellWord[]): number {
       break;
     }
   }
+
   if (words[index]?.value === "command") {
     index++;
     if (words[index]?.value?.startsWith("-")) return -1;

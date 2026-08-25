@@ -71,6 +71,8 @@ test("allows only bounded, statically parsed frog list output inspection", () =>
     "FROG_COLOR=0 env FROG_CONFIG=/tmp/frog command frog list -S main --cwd . | head --lines=0",
     "env -u FROG_CONFIG frog list --cwd . | command head -80",
     "env -C /tmp frog list --state pending | env tail -n 80",
+    "command env -u FROG_CONFIG frog list --cwd . | command env head -80",
+    "command env -C /tmp frog list --state pending | command env tail -n 80",
   ]) {
     expect(runToolCall(command)).toBeUndefined();
   }
@@ -95,6 +97,16 @@ test("blocks unsafe output truncation despite a frog command name", () => {
     "env -u FROG_CONFIG frog publish | head -80",
     "env -C /tmp frog unknown-command | tail -80",
     "env --split-string='frog publish' | head -80",
+    "command env -u FROG_CONFIG frog publish | head -80",
+    "command env -C /tmp frog unknown-command | tail -80",
+    "command env pnpm test | command tail -80",
+    "frog publish | head -80; true",
+    "frog $FROG_SUBCOMMAND | command head -80; echo done",
+    "pnpm test | env tail -80 && echo done",
+    "frog publish | command head -80 || true",
+    "frog publish | command head -80 > /tmp/frog-output",
+    "{ frog publish | command head -80; }",
+    "frog publish | (command head -80)",
   ]) {
     expect(runToolCall(command)).toMatchObject({ block: true });
   }
