@@ -456,7 +456,7 @@ function readShellWord(input: string, startIndex: number): ShellWord | undefined
     }
 
     if (/\s/.test(char)) break;
-    if (";|&<>".includes(char)) break;
+    if ("(){};|&<>".includes(char)) break;
     if (char === "'" || char === '"') {
       quote = char;
       i++;
@@ -765,21 +765,26 @@ function hasMutatingNpmCommand(command: string): string | undefined {
   return undefined;
 }
 
-function shellCommandSegments(command: string): string[] {
-  const segments: string[] = [];
-  let words: string[] = [];
+function shellCommandSegments(command: string): ShellWord[][] {
+  const segments: ShellWord[][] = [];
+  let words: ShellWord[] = [];
   const flush = () => {
-    if (words.length > 0) segments.push(words.join(" "));
+    if (words.length > 0) segments.push(words);
     words = [];
   };
 
   for (let index = 0; index < command.length;) {
     const char = command[index]!;
+    if (char === "\n") {
+      flush();
+      index++;
+      continue;
+    }
     if (/\s/.test(char)) {
       index++;
       continue;
     }
-    if (";|&<>".includes(char)) {
+    if ("(){};|&<>".includes(char)) {
       flush();
       index++;
       continue;
@@ -789,17 +794,38 @@ function shellCommandSegments(command: string): string[] {
       index++;
       continue;
     }
-    words.push(word.value);
+    if (words.length === 0 && (word.value === "then" || word.value === "do" || word.value === "else")) {
+      index = word.end;
+      continue;
+    }
+    words.push(word);
     index = word.end;
   }
   flush();
   return segments;
 }
 
+function commandExecutableIndex(words: ShellWord[]): number {
+  let index = 0;
+  while (/^[A-Za-z_][A-Za-z0-9_]*=/.test(words[index]?.value ?? "")) index++;
+  if (words[index]?.value === "env") {
+    index++;
+    while (words[index]?.value.startsWith("-") || /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[index]?.value ?? "")) index++;
+  }
+  if (words[index]?.value === "command") index++;
+  return index;
+}
+
+function isRgCommand(words: ShellWord[]): boolean {
+  const executable = words[commandExecutableIndex(words)]?.value.replace(/^.*\//, "");
+  return executable === "rg" || executable === "ripgrep";
+}
+
 function hasUnsafeJsonlRg(command: string): boolean {
   if (hasHereDoc(command)) return false;
-  return shellCommandSegments(command).some((segment) => {
-    if (!/^rg\b/.test(segment)) return false;
+  return shellCommandSegments(command).some((words) => {
+    if (!isRgCommand(words)) return false;
+    const segment = words.map((word) => word.value).join(" ");
     if (/\brg\s+--files\b|\b--files\b|(?:^|\s)-(?:l|c)\b|\b--(?:files-with-matches|count|count-matches)\b/.test(segment)) return false;
     if (/\b--max-columns(?:=|\s+)\d+\b/.test(segment)) return false;
     return /\.jsonl\b|\.pi\/agent\/sessions|\.codex\/sessions|\.claude\/projects|\.openclaw\/.+\.jsonl/.test(segment);
@@ -808,8 +834,9 @@ function hasUnsafeJsonlRg(command: string): boolean {
 
 function hasUnsafePiSessionRg(command: string): boolean {
   if (hasHereDoc(command)) return false;
-  return shellCommandSegments(command).some((segment) => {
-    if (!/^rg\b/.test(segment)) return false;
+  return shellCommandSegments(command).some((words) => {
+    if (!isRgCommand(words)) return false;
+    const segment = words.map((word) => word.value).join(" ");
     if (!/(?:~|\$HOME|\/Users\/gfw)\/\.pi\/agent\/sessions|\.pi\/agent\/sessions/.test(segment)) return false;
     if (/\brg\s+--files\b|\b--files\b|(?:^|\s)-(?:l|c)\b|\b--(?:files-with-matches|count|count-matches)\b/.test(segment)) return false;
     return !/\b--max-columns(?:=|\s+)\d+\b/.test(segment);
@@ -829,17 +856,6 @@ const RG_LONG_OPTIONS_WITH_VALUE = new Set([
 function isBroadSearchRoot(value: string): boolean {
   const path = value.replace(/\/+$/, "");
   return path === "" || path === "~" || path === "$HOME" || path === "/Users" || path === "/Users/gfw";
-}
-
-function commandExecutableIndex(words: ShellWord[]): number {
-  let index = 0;
-  while (/^[A-Za-z_][A-Za-z0-9_]*=/.test(words[index]?.value ?? "")) index++;
-  if (words[index]?.value === "env") {
-    index++;
-    while (words[index]?.value.startsWith("-") || /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[index]?.value ?? "")) index++;
-  }
-  if (words[index]?.value === "command") index++;
-  return index;
 }
 
 function rgHasBroadPathOperand(words: ShellWord[]): boolean {
@@ -888,35 +904,7 @@ function rgHasBroadPathOperand(words: ShellWord[]): boolean {
 
 function hasBroadUnboundedHomeRg(command: string): boolean {
   if (hasHereDoc(command)) return false;
-
-  let words: ShellWord[] = [];
-  const checkSegment = () => {
-    const blocked = rgHasBroadPathOperand(words);
-    words = [];
-    return blocked;
-  };
-
-  for (let index = 0; index < command.length;) {
-    const char = command[index]!;
-    if (/\s/.test(char)) {
-      index++;
-      continue;
-    }
-    if (";|&<>".includes(char)) {
-      if (checkSegment()) return true;
-      index++;
-      continue;
-    }
-    const word = readShellWord(command, index);
-    if (!word) {
-      index++;
-      continue;
-    }
-    words.push(word);
-    index = word.end;
-  }
-
-  return checkSegment();
+  return shellCommandSegments(command).some(rgHasBroadPathOperand);
 }
 
 function packageManagerNudge(command: string, cwd: string): string | undefined {
