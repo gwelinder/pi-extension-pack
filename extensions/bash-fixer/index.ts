@@ -781,13 +781,107 @@ function hasUnsafePiSessionRg(command: string): boolean {
   return !/\b--max-columns(?:=|\s+)\d+\b/.test(command);
 }
 
+const RG_SHORT_OPTIONS_WITH_VALUE = new Set(["A", "B", "C", "d", "e", "E", "f", "g", "j", "m", "M", "r", "t", "T"]);
+const RG_LONG_OPTIONS_WITH_VALUE = new Set([
+  "after-context", "before-context", "color", "colors", "context", "context-separator",
+  "dfa-size-limit", "encoding", "engine", "field-context-separator", "field-match-separator",
+  "file", "glob", "hostname-bin", "hyperlink-format", "ignore-file", "max-columns",
+  "max-count", "max-depth", "max-filesize", "path-separator", "pre", "pre-glob",
+  "regexp", "regex-size-limit", "replace", "sort", "sortr", "threads", "type",
+  "type-add", "type-clear", "type-not",
+]);
+
+function isBroadSearchRoot(value: string): boolean {
+  const path = value.replace(/\/+$/, "");
+  return path === "" || path === "~" || path === "$HOME" || path === "/Users" || path === "/Users/gfw";
+}
+
+function commandExecutableIndex(words: ShellWord[]): number {
+  let index = 0;
+  while (/^[A-Za-z_][A-Za-z0-9_]*=/.test(words[index]?.value ?? "")) index++;
+  if (words[index]?.value === "env") {
+    index++;
+    while (words[index]?.value.startsWith("-") || /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[index]?.value ?? "")) index++;
+  }
+  if (words[index]?.value === "command") index++;
+  return index;
+}
+
+function rgHasBroadPathOperand(words: ShellWord[]): boolean {
+  const executableIndex = commandExecutableIndex(words);
+  const executable = words[executableIndex]?.value.replace(/^.*\//, "");
+  if (executable !== "rg" && executable !== "ripgrep") return false;
+
+  let hasPattern = false;
+  let filesMode = false;
+  let optionsEnded = false;
+  for (let index = executableIndex + 1; index < words.length; index++) {
+    const value = words[index]!.value;
+    if (!optionsEnded && value === "--") {
+      optionsEnded = true;
+      continue;
+    }
+
+    if (!optionsEnded && value.startsWith("--") && value.length > 2) {
+      const [option] = value.slice(2).split("=", 1);
+      if (option === "files") filesMode = true;
+      if (option === "regexp" || option === "file") hasPattern = true;
+      if (!value.includes("=") && RG_LONG_OPTIONS_WITH_VALUE.has(option)) index++;
+      continue;
+    }
+
+    if (!optionsEnded && value.startsWith("-") && value !== "-") {
+      const flags = value.slice(1);
+      const valueFlagIndex = [...flags].findIndex((flag) => RG_SHORT_OPTIONS_WITH_VALUE.has(flag));
+      if (valueFlagIndex >= 0) {
+        const valueFlag = flags[valueFlagIndex]!;
+        if (valueFlag === "e" || valueFlag === "f") hasPattern = true;
+        if (valueFlagIndex === flags.length - 1) index++;
+      }
+      continue;
+    }
+
+    // `rg --files` has no pattern; every non-option operand is a search root.
+    if (!filesMode && !hasPattern) {
+      hasPattern = true;
+      continue;
+    }
+    if (isBroadSearchRoot(value)) return true;
+  }
+  return false;
+}
+
 function hasBroadUnboundedHomeRg(command: string): boolean {
   if (hasHereDoc(command)) return false;
-  if (!/(?:^|[\n;&|()]\s*)rg\b/.test(command)) return false;
-  if (!/(?:~|\$HOME|\/Users\/gfw)(?:\s|\/|$)/.test(command)) return false;
-  if (/\b--files\b|\b--glob\b|\s-g\s|\b--max-count\b|(?:^|\s)-m\s*\d+|(?:^|\s)-(?:l|c)\b|\b--(?:files-with-matches|count|count-matches)\b|\b--max-columns\b|\b--type\b|\s-t\w/.test(command)) return false;
-  if (/\/Users\/gfw\/code\/[^\s'";|&]+/.test(command)) return false;
-  return true;
+
+  let words: ShellWord[] = [];
+  const checkSegment = () => {
+    const blocked = rgHasBroadPathOperand(words);
+    words = [];
+    return blocked;
+  };
+
+  for (let index = 0; index < command.length;) {
+    const char = command[index]!;
+    if (/\s/.test(char)) {
+      index++;
+      continue;
+    }
+    if (";|&<>".includes(char)) {
+      if (checkSegment()) return true;
+      index++;
+      continue;
+    }
+    const word = readShellWord(command, index);
+    if (!word) {
+      index++;
+      continue;
+    }
+    words.push(word);
+    index = word.end;
+  }
+
+  return checkSegment();
 }
 
 function packageManagerNudge(command: string, cwd: string): string | undefined {
