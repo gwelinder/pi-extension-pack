@@ -69,6 +69,8 @@ test("allows only bounded, statically parsed frog list output inspection", () =>
     "frog list | head -80",
     "frog list --state pending --since main --cwd /tmp | tail -n 80",
     "FROG_COLOR=0 env FROG_CONFIG=/tmp/frog command frog list -S main --cwd . | head --lines=0",
+    "env -u FROG_CONFIG frog list --cwd . | command head -80",
+    "env -C /tmp frog list --state pending | env tail -n 80",
   ]) {
     expect(runToolCall(command)).toBeUndefined();
   }
@@ -77,15 +79,22 @@ test("allows only bounded, statically parsed frog list output inspection", () =>
 test("blocks unsafe output truncation despite a frog command name", () => {
   for (const command of [
     "pnpm test | tail -80",
+    "pnpm test | env tail -80",
     "frog log --title repro --body details | head -80",
+    "frog publish | command head -80",
     "frog resolve 20260826012708 | tail -80",
     "frog publish | head -80",
     "frog sync | tail -80",
     "frog list | head -80 | frog log --title repro --body details",
+    "frog list | command head -80 | frog log --title repro --body details",
     "frog list | tail -n +1",
     "frog unknown-command | head -80",
     "frog $FROG_SUBCOMMAND | head -80",
+    "frog $FROG_SUBCOMMAND | command head -80",
     "$FROG_BIN list | head -80",
+    "env -u FROG_CONFIG frog publish | head -80",
+    "env -C /tmp frog unknown-command | tail -80",
+    "env --split-string='frog publish' | head -80",
   ]) {
     expect(runToolCall(command)).toMatchObject({ block: true });
   }

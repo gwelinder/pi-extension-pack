@@ -699,14 +699,14 @@ function hasCurlPollingLoop(command: string): boolean {
 }
 
 function hasOutputTruncation(command: string): boolean {
-  return /\|\s*(?:tail|head)\b/.test(command);
+  return parsePipeline(command)?.some(isPotentialOutputTruncatorStage) ?? false;
 }
 
 function hasValidationOutputTruncation(command: string): boolean {
-  if (!hasOutputTruncation(command)) return false;
-  return /(?:pnpm|npm|yarn|bun|npx|tsc|vitest|playwright|next|wrangler)[^\n|]*(?:typecheck|test|lint|build|check|vitest|playwright|tsc|pages\s+deploy)[^\n|]*\|\s*(?:tail|head)\b/.test(
-    command
-  );
+  const pipeline = parsePipeline(command);
+  return pipeline?.some((stage, index) =>
+    isValidationCommand(stage) && pipeline.slice(index + 1).some(isPotentialOutputTruncatorStage)
+  ) ?? false;
 }
 
 function hasExternalCurlWithoutRobustness(command: string): boolean {
@@ -809,15 +809,42 @@ function shellCommandSegments(command: string): ShellWord[][] {
   return segments;
 }
 
+const ENV_OPTIONS_WITH_OPERAND = new Set(["-u", "--unset", "-C", "--chdir"]);
+const ENV_OPTIONS_WITHOUT_OPERAND = new Set(["-i", "--ignore-environment", "-0", "--null"]);
+
 function commandExecutableIndex(words: ShellWord[]): number {
   let index = 0;
   while (/^[A-Za-z_][A-Za-z0-9_]*=/.test(words[index]?.value ?? "")) index++;
   if (words[index]?.value === "env") {
     index++;
-    while (words[index]?.value.startsWith("-") || /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[index]?.value ?? "")) index++;
+    while (index < words.length) {
+      const value = words[index]!.value;
+      if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(value) || ENV_OPTIONS_WITHOUT_OPERAND.has(value)) {
+        index++;
+        continue;
+      }
+      if (value === "--") {
+        index++;
+        break;
+      }
+      if (ENV_OPTIONS_WITH_OPERAND.has(value)) {
+        if (!words[index + 1]) return -1;
+        index += 2;
+        continue;
+      }
+      if (/^(?:--unset|--chdir)=.+$/.test(value) || /^-(?:u|C).+$/.test(value)) {
+        index++;
+        continue;
+      }
+      if (value.startsWith("-")) return -1;
+      break;
+    }
   }
-  if (words[index]?.value === "command") index++;
-  return index;
+  if (words[index]?.value === "command") {
+    index++;
+    if (words[index]?.value?.startsWith("-")) return -1;
+  }
+  return index < words.length ? index : -1;
 }
 
 function isRgCommand(words: ShellWord[]): boolean {
@@ -903,10 +930,34 @@ function isFrogListCommand(words: ShellWord[]): boolean {
   return true;
 }
 
-function isBoundedOutputTruncator(words: ShellWord[]): boolean {
+function hasEnvOrCommandPrefix(words: ShellWord[]): boolean {
+  let index = 0;
+  while (/^[A-Za-z_][A-Za-z0-9_]*=/.test(words[index]?.value ?? "")) index++;
+  return words[index]?.value === "env" || words[index]?.value === "command";
+}
+
+function isOutputTruncatorStage(words: ShellWord[]): boolean {
+  const executable = words[commandExecutableIndex(words)]?.value.replace(/^.*\//, "");
+  return executable === "head" || executable === "tail";
+}
+
+function isPotentialOutputTruncatorStage(words: ShellWord[]): boolean {
+  return isOutputTruncatorStage(words) || (commandExecutableIndex(words) === -1 && hasEnvOrCommandPrefix(words));
+}
+
+function isValidationCommand(words: ShellWord[]): boolean {
   const executableIndex = commandExecutableIndex(words);
   const executable = words[executableIndex]?.value.replace(/^.*\//, "");
-  if (executable !== "head" && executable !== "tail" || !words.every(isStaticShellWord)) return false;
+  if (!executable || !/^(?:pnpm|npm|yarn|bun|npx|tsc|vitest|playwright|next|wrangler)$/.test(executable)) return false;
+  if (/^(?:tsc|vitest|playwright)$/.test(executable)) return true;
+  return /(?:typecheck|test|lint|build|check|vitest|playwright|tsc|pages\s+deploy)/.test(
+    words.slice(executableIndex + 1).map((word) => word.value).join(" ")
+  );
+}
+
+function isBoundedOutputTruncator(words: ShellWord[]): boolean {
+  const executableIndex = commandExecutableIndex(words);
+  if (!isOutputTruncatorStage(words) || !words.every(isStaticShellWord)) return false;
 
   const args = words.slice(executableIndex + 1).map((word) => word.value);
   if (args.length === 0) return true;
@@ -919,14 +970,18 @@ function isBoundedFrogListInspection(command: string): boolean {
   return pipeline?.length === 2 && isFrogListCommand(pipeline[0]!) && isBoundedOutputTruncator(pipeline[1]!);
 }
 
-function hasFrogCommand(command: string): boolean {
-  return shellCommandSegments(command).some((words) => words[commandExecutableIndex(words)]?.value.replace(/^.*\//, "") === "frog");
+function hasFrogOrUnresolvedPrefixedCommand(command: string): boolean {
+  return shellCommandSegments(command).some((words) => {
+    const executableIndex = commandExecutableIndex(words);
+    if (words[executableIndex]?.value.replace(/^.*\//, "") === "frog") return true;
+    return executableIndex === -1 && hasEnvOrCommandPrefix(words);
+  });
 }
 
 function hasUnsafeOutputTruncation(command: string): boolean {
   if (!hasOutputTruncation(command)) return false;
   if (hasValidationOutputTruncation(command) || /[`$]/.test(command)) return true;
-  return hasFrogCommand(command) && !isBoundedFrogListInspection(command);
+  return hasFrogOrUnresolvedPrefixedCommand(command) && !isBoundedFrogListInspection(command);
 }
 
 function hasUnsafeJsonlRg(command: string): boolean {
