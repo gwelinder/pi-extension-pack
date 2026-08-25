@@ -698,8 +698,12 @@ function hasCurlPollingLoop(command: string): boolean {
   );
 }
 
+function hasOutputTruncation(command: string): boolean {
+  return /\|\s*(?:tail|head)\b/.test(command);
+}
+
 function hasValidationOutputTruncation(command: string): boolean {
-  if (!/\|\s*(?:tail|head)\b/.test(command)) return false;
+  if (!hasOutputTruncation(command)) return false;
   return /(?:pnpm|npm|yarn|bun|npx|tsc|vitest|playwright|next|wrangler)[^\n|]*(?:typecheck|test|lint|build|check|vitest|playwright|tsc|pages\s+deploy)[^\n|]*\|\s*(?:tail|head)\b/.test(
     command
   );
@@ -819,6 +823,110 @@ function commandExecutableIndex(words: ShellWord[]): number {
 function isRgCommand(words: ShellWord[]): boolean {
   const executable = words[commandExecutableIndex(words)]?.value.replace(/^.*\//, "");
   return executable === "rg" || executable === "ripgrep";
+}
+
+function parsePipeline(command: string): ShellWord[][] | undefined {
+  const segments: ShellWord[][] = [];
+  let words: ShellWord[] = [];
+  let index = 0;
+
+  while (index < command.length) {
+    const char = command[index]!;
+    if (/\s/.test(char)) {
+      index++;
+      continue;
+    }
+    if (char === "|") {
+      if (command[index + 1] === "|" || words.length === 0) return undefined;
+      segments.push(words);
+      words = [];
+      index++;
+      continue;
+    }
+    if ("(){};&<>".includes(char)) return undefined;
+
+    const word = readShellWord(command, index);
+    if (!word) return undefined;
+    words.push(word);
+    index = word.end;
+  }
+
+  if (words.length === 0 || segments.length === 0) return undefined;
+  segments.push(words);
+  return segments;
+}
+
+function isStaticShellWord(word: ShellWord): boolean {
+  if (/[`$*?\[\]{}()]/.test(word.raw) || word.raw.endsWith("\\")) return false;
+
+  let quote: "'" | '"' | undefined;
+  for (let index = 0; index < word.raw.length; index++) {
+    const char = word.raw[index]!;
+    if (quote) {
+      if (char === quote) quote = undefined;
+      continue;
+    }
+    if (char === "'" || char === '"') {
+      quote = char;
+      continue;
+    }
+    if (char === "\\") index++;
+  }
+  return quote === undefined;
+}
+
+function isFrogListCommand(words: ShellWord[]): boolean {
+  if (!words.every(isStaticShellWord)) return false;
+
+  const executableIndex = commandExecutableIndex(words);
+  if (words[executableIndex]?.value.replace(/^.*\//, "") !== "frog" || words[executableIndex + 1]?.value !== "list") return false;
+
+  for (let index = executableIndex + 2; index < words.length; index++) {
+    const value = words[index]!.value;
+    if (value === "--state" || value === "--since" || value === "--cwd" || value === "-S") {
+      const optionValue = words[++index];
+      if (!optionValue || !isStaticShellWord(optionValue)) return false;
+      if (value === "--state" && !["linked", "pending"].includes(optionValue.value)) return false;
+      continue;
+    }
+    if (value.startsWith("--state=")) {
+      if (!["linked", "pending"].includes(value.slice("--state=".length))) return false;
+      continue;
+    }
+    if (value.startsWith("--since=") || value.startsWith("--cwd=")) {
+      if (value.endsWith("=")) return false;
+      continue;
+    }
+    return false;
+  }
+
+  return true;
+}
+
+function isBoundedOutputTruncator(words: ShellWord[]): boolean {
+  const executableIndex = commandExecutableIndex(words);
+  const executable = words[executableIndex]?.value.replace(/^.*\//, "");
+  if (executable !== "head" && executable !== "tail" || !words.every(isStaticShellWord)) return false;
+
+  const args = words.slice(executableIndex + 1).map((word) => word.value);
+  if (args.length === 0) return true;
+  if (args.length === 1) return /^-\d+$/.test(args[0]!) || /^--lines=\d+$/.test(args[0]!);
+  return args.length === 2 && (args[0] === "-n" || args[0] === "--lines") && /^\d+$/.test(args[1]!);
+}
+
+function isBoundedFrogListInspection(command: string): boolean {
+  const pipeline = parsePipeline(command);
+  return pipeline?.length === 2 && isFrogListCommand(pipeline[0]!) && isBoundedOutputTruncator(pipeline[1]!);
+}
+
+function hasFrogCommand(command: string): boolean {
+  return shellCommandSegments(command).some((words) => words[commandExecutableIndex(words)]?.value.replace(/^.*\//, "") === "frog");
+}
+
+function hasUnsafeOutputTruncation(command: string): boolean {
+  if (!hasOutputTruncation(command)) return false;
+  if (hasValidationOutputTruncation(command) || /[`$]/.test(command)) return true;
+  return hasFrogCommand(command) && !isBoundedFrogListInspection(command);
 }
 
 function hasUnsafeJsonlRg(command: string): boolean {
@@ -1031,10 +1139,10 @@ function getIneffectiveCommandNudge(command: string, cwd: string): string | unde
     ].join(" ");
   }
 
-  if (hasValidationOutputTruncation(command)) {
+  if (hasUnsafeOutputTruncation(command)) {
     return [
-      "Blocked validation/build command piped directly to `tail`/`head`; this hides full output and can mask the real failure.",
-      "Use an inspectable pattern that preserves exit code: `log=$(mktemp); <command> >\"$log\" 2>&1; status=$?; tail -80 \"$log\"; echo \"Full output: $log\"; exit $status`.",
+      "Blocked unsafe output piped directly to `tail`/`head`; only a statically parsed, bounded `frog list` inspection is allowed for Frog commands.",
+      "For validation/build output, use an inspectable pattern that preserves exit code: `log=$(mktemp); <command> >\"$log\" 2>&1; status=$?; tail -80 \"$log\"; echo \"Full output: $log\"; exit $status`.",
       "For long validations, consider `process.start` and inspect logs instead of blocking the main turn.",
     ].join(" ");
   }
