@@ -1234,6 +1234,34 @@ const READ_ONLY_TMUX_SUBCOMMANDS = new Set([
   "show-options",
 ]);
 const GIT_INSPECTION_UNSAFE_ARGS = /^(?:-o$|--output(?:=|$)|--exec(?:=|$)|--ext-diff$|--textconv$|--upload-pack(?:=|$)|--receive-pack(?:=|$))/;
+const TMUX_CAPTURE_PANE_OPTIONS_WITH_VALUE = new Set(["b", "E", "S", "t"]);
+const TMUX_CAPTURE_PANE_OPTIONS = new Set(["a", "e", "p", "P", "q", "C", "J"]);
+
+function isReadOnlyTmuxCapturePane(words: ShellWord[], executableIndex: number): boolean {
+  let printMode = false;
+
+  for (let index = executableIndex + 2; index < words.length; index++) {
+    const argument = words[index]!.value;
+    if (argument === "--" || !argument.startsWith("-") || argument === "-") return false;
+
+    const options = argument.slice(1);
+    for (let optionIndex = 0; optionIndex < options.length; optionIndex++) {
+      const option = options[optionIndex]!;
+      if (option === "b") return false;
+      if (TMUX_CAPTURE_PANE_OPTIONS_WITH_VALUE.has(option)) {
+        if (optionIndex === options.length - 1) {
+          if (!words[index + 1]) return false;
+          index++;
+        }
+        break;
+      }
+      if (!TMUX_CAPTURE_PANE_OPTIONS.has(option)) return false;
+      if (option === "p") printMode = true;
+    }
+  }
+
+  return printMode;
+}
 
 function isReadOnlyInspectionCommand(words: ShellWord[]): boolean {
   if (!words.every(isStaticShellWord)) return false;
@@ -1251,7 +1279,9 @@ function isReadOnlyInspectionCommand(words: ShellWord[]): boolean {
 
   if (executable === "tmux") {
     const subcommand = words[executableIndex + 1]?.value;
-    return subcommand !== undefined && READ_ONLY_TMUX_SUBCOMMANDS.has(subcommand);
+    if (!subcommand || !READ_ONLY_TMUX_SUBCOMMANDS.has(subcommand)) return false;
+    if (subcommand === "capture-pane") return isReadOnlyTmuxCapturePane(words, executableIndex);
+    return true;
   }
 
   return false;
