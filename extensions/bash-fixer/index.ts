@@ -724,7 +724,13 @@ function hasShellPipelineOperator(command: string): boolean {
       quote = char;
       continue;
     }
-    if (char === "|" && command[index + 1] !== "|") return true;
+    if (char === "|") {
+      if (command[index + 1] === "|") {
+        index++;
+        continue;
+      }
+      return true;
+    }
   }
 
   return false;
@@ -732,16 +738,18 @@ function hasShellPipelineOperator(command: string): boolean {
 
 function hasOutputTruncation(command: string): boolean {
   if (!hasShellPipelineOperator(command)) return false;
-  const pipeline = parsePipeline(command);
-  if (pipeline) return pipeline.some(isPotentialOutputTruncatorStage);
-  return shellCommandSegments(command).some(isPotentialOutputTruncatorStage) || /[`$]/.test(command);
+  const pipelines = parseShellPipelines(command);
+  if (pipelines) return pipelines.some((pipeline) => pipeline.length > 1 && pipeline.some(isPotentialOutputTruncatorStage));
+  return shellCommandSegments(command).some(isPotentialOutputTruncatorStage) || hasShellExpansionSemantics(command);
 }
 
 function hasValidationOutputTruncation(command: string): boolean {
   if (!hasShellPipelineOperator(command)) return false;
-  const pipeline = parsePipeline(command);
-  if (pipeline) return pipeline.some((stage, index) =>
-    isValidationCommand(stage) && pipeline.slice(index + 1).some(isPotentialOutputTruncatorStage)
+  const pipelines = parseShellPipelines(command);
+  if (pipelines) return pipelines.some((pipeline) =>
+    pipeline.length > 1 && pipeline.some((stage, index) =>
+      isValidationCommand(stage) && pipeline.slice(index + 1).some(isPotentialOutputTruncatorStage)
+    )
   );
 
   const stages = shellCommandSegments(command);
@@ -929,6 +937,117 @@ function parsePipeline(command: string): ShellWord[][] | undefined {
   return segments;
 }
 
+// Parse top-level pipelines without treating a control operator in one
+// statement as part of a neighbouring statement.  This is deliberately not a
+// general shell parser: unsupported syntax returns undefined so callers can
+// take their existing fail-closed path instead of guessing at execution order.
+function parseShellPipelines(command: string): ShellWord[][][] | undefined {
+  const pipelines: ShellWord[][][] = [];
+  let pipeline: ShellWord[][] = [];
+  let words: ShellWord[] = [];
+  let index = 0;
+
+  const flushStage = () => {
+    if (words.length > 0) pipeline.push(words);
+    words = [];
+  };
+  const flushPipeline = () => {
+    flushStage();
+    if (pipeline.length > 0) pipelines.push(pipeline);
+    pipeline = [];
+  };
+
+  while (index < command.length) {
+    const char = command[index]!;
+    if (char === "\n") {
+      if (words.length === 0 && pipeline.length === 0) return undefined;
+      flushPipeline();
+      index++;
+      continue;
+    }
+    if (/\s/.test(char)) {
+      index++;
+      continue;
+    }
+    if (char === "|") {
+      if (command[index + 1] === "|") {
+        if (words.length === 0) return undefined;
+        flushPipeline();
+        index += 2;
+        continue;
+      }
+      if (words.length === 0) return undefined;
+      flushStage();
+      index++;
+      continue;
+    }
+    if (char === "&" && command[index + 1] === "&") {
+      if (words.length === 0) return undefined;
+      flushPipeline();
+      index += 2;
+      continue;
+    }
+    if (char === ";") {
+      if (words.length === 0 && pipeline.length === 0) return undefined;
+      flushPipeline();
+      index++;
+      continue;
+    }
+    // Redirections, grouping, and other shell grammar are not safe to
+    // reconstruct from token positions.  The older segment scanner still
+    // supplies conservative detection for these forms.
+    if ("(){}<>&".includes(char)) return undefined;
+
+    const word = readShellWord(command, index);
+    if (!word) return undefined;
+    words.push(word);
+    index = word.end;
+  }
+
+  if (words.length > 0 || pipeline.length > 0) flushPipeline();
+  return pipelines;
+}
+
+function hasShellExpansionSemantics(command: string): boolean {
+  let quote: "'" | '"' | undefined;
+  let escaped = false;
+
+  for (let index = 0; index < command.length; index++) {
+    const char = command[index]!;
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (quote === "'") {
+      if (char === "'") quote = undefined;
+      continue;
+    }
+    if (quote === '"') {
+      if (char === "\\") {
+        escaped = true;
+        continue;
+      }
+      if (char === '"') {
+        quote = undefined;
+        continue;
+      }
+      if (char === "`" || (char === "$" && /[({0-9A-Za-z_?$*@#!-]/.test(command[index + 1] ?? ""))) return true;
+      continue;
+    }
+    if (char === "\\") {
+      escaped = true;
+      continue;
+    }
+    if (char === "'" || char === '"') {
+      quote = char;
+      continue;
+    }
+    if (char === "`" || (char === "$" && /[({0-9A-Za-z_?$*@#!-]/.test(command[index + 1] ?? ""))) return true;
+  }
+
+  return false;
+}
+
 function isStaticShellWord(word: ShellWord): boolean {
   if (/[`$*?\[\]{}()]/.test(word.raw) || word.raw.endsWith("\\")) return false;
 
@@ -1016,6 +1135,54 @@ function isBoundedFrogListInspection(command: string): boolean {
   return pipeline?.length === 2 && isFrogListCommand(pipeline[0]!) && isBoundedOutputTruncator(pipeline[1]!);
 }
 
+function rgPathOperands(words: ShellWord[]): string[] | undefined {
+  const executableIndex = commandExecutableIndex(words);
+  if (!isRgCommand(words)) return undefined;
+
+  const operands: string[] = [];
+  let metadataOnly = false;
+  let hasPattern = false;
+  let filesMode = false;
+  let optionsEnded = false;
+  for (let index = executableIndex + 1; index < words.length; index++) {
+    const value = words[index]!.value;
+    if (!optionsEnded && value === "--") {
+      optionsEnded = true;
+      continue;
+    }
+
+    if (!optionsEnded && value.startsWith("--") && value.length > 2) {
+      const [option] = value.slice(2).split("=", 1);
+      if (option === "files") filesMode = true;
+      if (option === "files-with-matches" || option === "count" || option === "count-matches") metadataOnly = true;
+      if (option === "regexp" || option === "file") hasPattern = true;
+      if (!value.includes("=") && RG_LONG_OPTIONS_WITH_VALUE.has(option)) index++;
+      continue;
+    }
+
+    if (!optionsEnded && value.startsWith("-") && value !== "-") {
+      const flags = value.slice(1);
+      if (flags.includes("l") || flags.includes("c")) metadataOnly = true;
+      const valueFlagIndex = [...flags].findIndex((flag) => RG_SHORT_OPTIONS_WITH_VALUE.has(flag));
+      if (valueFlagIndex >= 0) {
+        const valueFlag = flags[valueFlagIndex]!;
+        if (valueFlag === "e" || valueFlag === "f") hasPattern = true;
+        // `-ePATTERN` / `-fFILE` carry their value in this argv item.
+        // Otherwise the next argv item is the option value.
+        if (valueFlagIndex === flags.length - 1) index++;
+      }
+      continue;
+    }
+
+    if (!filesMode && !hasPattern) {
+      hasPattern = true;
+      continue;
+    }
+    operands.push(value);
+  }
+  return metadataOnly ? [] : operands;
+}
+
 function hasFrogOrUnresolvedPrefixedCommand(command: string): boolean {
   return shellCommandSegments(command).some((words) => {
     const executableIndex = commandExecutableIndex(words);
@@ -1026,7 +1193,7 @@ function hasFrogOrUnresolvedPrefixedCommand(command: string): boolean {
 
 function hasUnsafeOutputTruncation(command: string): boolean {
   if (!hasOutputTruncation(command)) return false;
-  if (hasValidationOutputTruncation(command) || /[`$]/.test(command)) return true;
+  if (hasValidationOutputTruncation(command) || hasShellExpansionSemantics(command)) return true;
   return hasFrogOrUnresolvedPrefixedCommand(command) && !isBoundedFrogListInspection(command);
 }
 
@@ -1035,9 +1202,10 @@ function hasUnsafeJsonlRg(command: string): boolean {
   return shellCommandSegments(command).some((words) => {
     if (!isRgCommand(words)) return false;
     const segment = words.map((word) => word.value).join(" ");
-    if (/\brg\s+--files\b|\b--files\b|(?:^|\s)-(?:l|c)\b|\b--(?:files-with-matches|count|count-matches)\b/.test(segment)) return false;
     if (/\b--max-columns(?:=|\s+)\d+\b/.test(segment)) return false;
-    return /\.jsonl\b|\.pi\/agent\/sessions|\.codex\/sessions|\.claude\/projects|\.openclaw\/.+\.jsonl/.test(segment);
+    return rgPathOperands(words)?.some((operand) =>
+      /\.jsonl\b|\.pi\/agent\/sessions|\.codex\/sessions|\.claude\/projects|\.openclaw\/.+\.jsonl/.test(operand)
+    ) ?? false;
   });
 }
 
@@ -1047,9 +1215,48 @@ function hasUnsafePiSessionRg(command: string): boolean {
     if (!isRgCommand(words)) return false;
     const segment = words.map((word) => word.value).join(" ");
     if (!/(?:~|\$HOME|\/Users\/gfw)\/\.pi\/agent\/sessions|\.pi\/agent\/sessions/.test(segment)) return false;
-    if (/\brg\s+--files\b|\b--files\b|(?:^|\s)-(?:l|c)\b|\b--(?:files-with-matches|count|count-matches)\b/.test(segment)) return false;
-    return !/\b--max-columns(?:=|\s+)\d+\b/.test(segment);
+    if (/\b--max-columns(?:=|\s+)\d+\b/.test(segment)) return false;
+    return rgPathOperands(words)?.some((operand) =>
+      /(?:~|\$HOME|\/Users\/gfw)\/\.pi\/agent\/sessions|\.pi\/agent\/sessions/.test(operand)
+    ) ?? false;
   });
+}
+
+function safeInspectionPrefix(command: string): string | undefined {
+  const segments = shellCommandSegments(command);
+  const unsafe = segments.find((words) => {
+    if (!isRgCommand(words)) return false;
+    const operands = rgPathOperands(words) ?? [];
+    return operands.some((operand) =>
+      /\.jsonl\b|\.pi\/agent\/sessions|\.codex\/sessions|\.claude\/projects|\.openclaw\/.+\.jsonl/.test(operand)
+    );
+  });
+  if (!unsafe || unsafe[0]!.start === 0) return undefined;
+
+  // Offer only a genuinely executable simple prefix.  Returning a guessed
+  // branch/group prefix would invite the caller to change shell semantics.
+  const prefix = command
+    .slice(0, unsafe[0]!.start)
+    .replace(/[\s;|&]+$/, "")
+    .trim();
+  const parsedPrefix = parseShellPipelines(prefix);
+  if (!prefix || !parsedPrefix || parsedPrefix.length !== 1 || parsedPrefix[0]!.length !== 1) return undefined;
+  const prefixWords = parsedPrefix[0]![0]!;
+  const prefixExecutable = prefixWords[commandExecutableIndex(prefixWords)]?.value.replace(/^.*\//, "");
+  if (!prefixExecutable || !new Set(["cat", "echo", "git", "head", "ls", "printf", "pwd", "tail", "tmux", "wc"]).has(prefixExecutable)) {
+    return undefined;
+  }
+  return prefix;
+}
+
+function explainBlockedInspection(command: string, reason: string): string {
+  const prefix = safeInspectionPrefix(command);
+  if (!prefix) return `${reason} No part of this compound command was executed.`;
+  return [
+    reason,
+    "No part of this compound command was executed, so no output from the safe inspection exists yet.",
+    `Run the safe inspection separately before retrying: ${prefix}`,
+  ].join(" ");
 }
 
 const RG_SHORT_OPTIONS_WITH_VALUE = new Set(["A", "B", "C", "d", "e", "E", "f", "g", "j", "m", "M", "r", "t", "T"]);
@@ -1165,18 +1372,18 @@ function getIneffectiveCommandNudge(command: string, cwd: string): string | unde
   }
 
   if (hasUnsafePiSessionRg(command)) {
-    return [
+    return explainBlockedInspection(command, [
       "Blocked raw `rg` over Pi session JSONL logs. Session JSONL lines often contain huge embedded tool results/images, so one match can dump hundreds of MB into context/temp spill logs.",
       "Use a JSONL-aware Python extractor that parses records and prints only selected fields/counts, or first run `rg -l '<pattern>' ~/.pi/agent/sessions --glob '*.jsonl'` to identify candidate files.",
       "If you truly need text grep, rerun with a narrow file list plus `--max-columns 300 -m <small-number>`.",
-    ].join(" ");
+    ].join(" "));
   }
 
   if (hasUnsafeJsonlRg(command)) {
-    return [
+    return explainBlockedInspection(command, [
       "Blocked unbounded plain-text `rg` over JSONL. JSONL log lines can be extremely large and will create noisy/truncated tool output.",
       "Use a short Python/JQ extractor for specific keys, or add `--max-columns 300 -m <small-number>` / `-l` / `--count` depending on the task.",
-    ].join(" ");
+    ].join(" "));
   }
 
   if (hasBroadUnboundedHomeRg(command)) {
@@ -1435,7 +1642,7 @@ export default function bashFixer(pi: ExtensionAPI) {
     }
   });
 
-  pi.on("tool_result", (event, ctx) => {
+  pi.on("tool_result", (event: any, ctx: any): any => {
     if (!isBashToolResult(event)) return;
 
     const inputCommand = typeof event.input.command === "string" ? event.input.command : "";
