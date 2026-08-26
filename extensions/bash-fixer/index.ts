@@ -1222,6 +1222,41 @@ function hasUnsafePiSessionRg(command: string): boolean {
   });
 }
 
+const READ_ONLY_SIMPLE_INSPECTIONS = new Set(["cat", "echo", "head", "ls", "printf", "pwd", "tail", "wc"]);
+const READ_ONLY_GIT_SUBCOMMANDS = new Set(["status", "diff", "log", "show"]);
+const READ_ONLY_TMUX_SUBCOMMANDS = new Set([
+  "capture-pane",
+  "display-message",
+  "list-panes",
+  "list-sessions",
+  "list-windows",
+  "show-environment",
+  "show-options",
+]);
+const GIT_INSPECTION_UNSAFE_ARGS = /^(?:-o$|--output(?:=|$)|--exec(?:=|$)|--ext-diff$|--textconv$|--upload-pack(?:=|$)|--receive-pack(?:=|$))/;
+
+function isReadOnlyInspectionCommand(words: ShellWord[]): boolean {
+  if (!words.every(isStaticShellWord)) return false;
+
+  const executableIndex = commandExecutableIndex(words);
+  const executable = words[executableIndex]?.value.replace(/^.*\//, "");
+  if (!executable) return false;
+  if (READ_ONLY_SIMPLE_INSPECTIONS.has(executable)) return true;
+
+  if (executable === "git") {
+    const subcommand = words[executableIndex + 1]?.value;
+    if (!subcommand || !READ_ONLY_GIT_SUBCOMMANDS.has(subcommand)) return false;
+    return !words.slice(executableIndex + 2).some((word) => GIT_INSPECTION_UNSAFE_ARGS.test(word.value));
+  }
+
+  if (executable === "tmux") {
+    const subcommand = words[executableIndex + 1]?.value;
+    return subcommand !== undefined && READ_ONLY_TMUX_SUBCOMMANDS.has(subcommand);
+  }
+
+  return false;
+}
+
 function safeInspectionPrefix(command: string): string | undefined {
   const segments = shellCommandSegments(command);
   const unsafe = segments.find((words) => {
@@ -1242,11 +1277,7 @@ function safeInspectionPrefix(command: string): string | undefined {
   const parsedPrefix = parseShellPipelines(prefix);
   if (!prefix || !parsedPrefix || parsedPrefix.length !== 1 || parsedPrefix[0]!.length !== 1) return undefined;
   const prefixWords = parsedPrefix[0]![0]!;
-  const prefixExecutable = prefixWords[commandExecutableIndex(prefixWords)]?.value.replace(/^.*\//, "");
-  if (!prefixExecutable || !new Set(["cat", "echo", "git", "head", "ls", "printf", "pwd", "tail", "tmux", "wc"]).has(prefixExecutable)) {
-    return undefined;
-  }
-  return prefix;
+  return isReadOnlyInspectionCommand(prefixWords) ? prefix : undefined;
 }
 
 function explainBlockedInspection(command: string, reason: string): string {

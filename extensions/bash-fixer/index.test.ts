@@ -185,3 +185,32 @@ test("does not execute a mutation before a blocked inspection", () => {
   expect((result as { reason: string }).reason).not.toContain("Run the safe inspection separately");
   expect(event.input.command).toBe(command);
 });
+
+test("reports only statically proven read-only git and tmux prefixes", () => {
+  for (const command of [
+    "git status --short; rg PATTERN ~/.pi/agent/sessions",
+    "git diff --stat; rg PATTERN ~/.pi/agent/sessions",
+    "git log -1 --oneline; rg PATTERN ~/.pi/agent/sessions",
+    "tmux capture-pane -t session -p; rg PATTERN ~/.pi/agent/sessions",
+    "tmux list-sessions; rg PATTERN ~/.pi/agent/sessions",
+  ]) {
+    const { result } = runToolCallWithEvent(command);
+    expect(result).toMatchObject({ block: true });
+    expect((result as { reason: string }).reason).toContain("Run the safe inspection separately");
+    expect((result as { reason: string }).reason).toContain(command.split(";")[0]!);
+  }
+
+  for (const command of [
+    "git reset --hard; rg PATTERN ~/.pi/agent/sessions",
+    "git branch new-name; rg PATTERN ~/.pi/agent/sessions",
+    "tmux kill-session -t work; rg PATTERN ~/.pi/agent/sessions",
+    "git status `printf dynamic`; rg PATTERN ~/.pi/agent/sessions",
+    "tmux capture-pane -t session -p `printf dynamic`; rg PATTERN ~/.pi/agent/sessions",
+    "git status $DYNAMIC; rg PATTERN ~/.pi/agent/sessions",
+  ]) {
+    const { result } = runToolCallWithEvent(command);
+    expect(result).toMatchObject({ block: true });
+    expect((result as { reason: string }).reason).not.toContain("Run the safe inspection separately");
+    expect((result as { reason: string }).reason).toContain("No part of this compound command was executed");
+  }
+});
