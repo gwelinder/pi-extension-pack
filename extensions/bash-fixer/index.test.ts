@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, expect, mock, test } from "bun:test";
+import * as codingAgent from "@earendil-works/pi-coding-agent";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -11,6 +12,7 @@ let bashFixer: (pi: unknown) => void;
 
 beforeAll(async () => {
   mock.module("@earendil-works/pi-coding-agent", () => ({
+    ...codingAgent,
     isBashToolResult: (event: { toolName: string }) => event.toolName === "bash",
     isToolCallEventType: (toolName: string, event: { toolName: string }) => event.toolName === toolName,
   }));
@@ -18,6 +20,10 @@ beforeAll(async () => {
 });
 
 function runToolCall(command: string) {
+  return runToolCallWithEvent(command).result;
+}
+
+function runToolCallWithEvent(command: string) {
   let toolCallHandler: ((event: any, ctx: any) => unknown) | undefined;
   bashFixer({
     on(eventName: string, handler: (event: any, ctx: any) => unknown) {
@@ -26,7 +32,7 @@ function runToolCall(command: string) {
   } as never);
 
   const event = { toolName: "bash", input: { command } };
-  return toolCallHandler!(event, { cwd: process.cwd() });
+  return { result: toolCallHandler!(event, { cwd: process.cwd() }), event };
 }
 
 afterAll(() => rmSync(agentDir, { recursive: true, force: true }));
@@ -133,4 +139,49 @@ test("scopes JSONL protections to the rg command segment", () => {
   ]) {
     expect(runToolCall(command)).toMatchObject({ block: true });
   }
+});
+
+test("blocks mixed session-log commands without executing or dropping statements", () => {
+  for (const operator of [";", "&&", "||", "\n"]) {
+    const command = `wc -l file ${operator} rg PATTERN ~/.pi/agent/sessions --glob '*.jsonl'`;
+    const { result, event } = runToolCallWithEvent(command);
+    expect(result).toMatchObject({ block: true });
+    expect((result as { reason: string }).reason).toContain("wc -l file");
+    expect((result as { reason: string }).reason).toContain("No part of this compound command was executed");
+    expect(event.input.command).toBe(command);
+  }
+
+  const unsafeFirst = "rg PATTERN ~/.pi/agent/sessions --glob '*.jsonl'; wc -l file";
+  const { result, event } = runToolCallWithEvent(unsafeFirst);
+  expect(result).toMatchObject({ block: true });
+  expect((result as { reason: string }).reason).toContain("No part of this compound command was executed");
+  expect((result as { reason: string }).reason).not.toContain("Run the safe inspection separately");
+  expect(event.input.command).toBe(unsafeFirst);
+});
+
+test("uses shell syntax and argv semantics for metacharacters and tmux capture-pane", () => {
+  for (const command of [
+    "printf '%s\\n' 'rg PATTERN ~/.pi/agent/sessions'",
+    "printf '%s\\n' \"tmux capture-pane -t session -p | head -80\"",
+    "echo 'rg PATTERN /tmp/audit.jsonl'",
+    "tmux capture-pane -t session -p",
+    "tmux capture-pane -t session -p | head -80",
+  ]) {
+    expect(runToolCall(command)).toBeUndefined();
+  }
+
+  for (const command of [
+    "tmux capture-pane -t session -p | rg PATTERN ~/.pi/agent/sessions",
+    "printf ok; rg PATTERN ~/.pi/agent/sessions",
+  ]) {
+    expect(runToolCall(command)).toMatchObject({ block: true });
+  }
+});
+
+test("does not execute a mutation before a blocked inspection", () => {
+  const command = "frog log --title should-not-run --body details; rg PATTERN ~/.pi/agent/sessions";
+  const { result, event } = runToolCallWithEvent(command);
+  expect(result).toMatchObject({ block: true });
+  expect((result as { reason: string }).reason).not.toContain("Run the safe inspection separately");
+  expect(event.input.command).toBe(command);
 });
