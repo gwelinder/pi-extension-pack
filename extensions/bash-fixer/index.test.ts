@@ -192,6 +192,7 @@ test("reports only statically proven read-only git and tmux prefixes", () => {
     "git diff --stat; rg PATTERN ~/.pi/agent/sessions",
     "git log -1 --oneline; rg PATTERN ~/.pi/agent/sessions",
     "tmux capture-pane -t session -p; rg PATTERN ~/.pi/agent/sessions",
+    "tmux capture-pane -pJ -t session; rg PATTERN ~/.pi/agent/sessions",
     "tmux list-sessions; rg PATTERN ~/.pi/agent/sessions",
   ]) {
     const { result } = runToolCallWithEvent(command);
@@ -204,6 +205,10 @@ test("reports only statically proven read-only git and tmux prefixes", () => {
     "git reset --hard; rg PATTERN ~/.pi/agent/sessions",
     "git branch new-name; rg PATTERN ~/.pi/agent/sessions",
     "tmux kill-session -t work; rg PATTERN ~/.pi/agent/sessions",
+    "tmux capture-pane -t session; rg PATTERN ~/.pi/agent/sessions",
+    "tmux capture-pane -p -b named; rg PATTERN ~/.pi/agent/sessions",
+    "tmux capture-pane -bp named; rg PATTERN ~/.pi/agent/sessions",
+    "tmux capture-pane -bt session; rg PATTERN ~/.pi/agent/sessions",
     "git status `printf dynamic`; rg PATTERN ~/.pi/agent/sessions",
     "tmux capture-pane -t session -p `printf dynamic`; rg PATTERN ~/.pi/agent/sessions",
     "git status $DYNAMIC; rg PATTERN ~/.pi/agent/sessions",
