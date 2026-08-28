@@ -19,13 +19,16 @@ beforeAll(async () => {
   ({ default: bashFixer } = await import("./index"));
 });
 
-function runToolCall(command: string) {
-  return runToolCallWithEvent(command).result;
+function runToolCall(command: string, activeTools: string[] = ["bash"]) {
+  return runToolCallWithEvent(command, activeTools).result;
 }
 
-function runToolCallWithEvent(command: string) {
+function runToolCallWithEvent(command: string, activeTools: string[] = ["bash"]) {
   let toolCallHandler: ((event: any, ctx: any) => unknown) | undefined;
   bashFixer({
+    getActiveTools() {
+      return activeTools;
+    },
     on(eventName: string, handler: (event: any, ctx: any) => unknown) {
       if (eventName === "tool_call") toolCallHandler = handler;
     },
@@ -36,6 +39,84 @@ function runToolCallWithEvent(command: string) {
 }
 
 afterAll(() => rmSync(agentDir, { recursive: true, force: true }));
+
+test("allows one static delayed handoff read only when no process tool is active", () => {
+  const repro = "sleep 30; test -f /tmp/handoff && stat /tmp/handoff";
+
+  expect(runToolCall(repro, ["bash", "read"])).toBeUndefined();
+
+  const blocked = runToolCall(repro, ["bash", "process"]);
+  expect(blocked).toMatchObject({ block: true });
+  expect((blocked as { reason: string }).reason).toContain("process.start");
+});
+
+test("recognizes true process tool namespace variants only", () => {
+  const repro = "sleep 30; test -f /tmp/handoff && stat /tmp/handoff";
+
+  for (const processTool of [
+    "process",
+    "process.start",
+    "functions.process",
+    "mcp__process__start",
+    "process_start",
+  ]) {
+    expect(runToolCall(repro, ["bash", processTool])).toMatchObject({ block: true });
+  }
+
+  for (const unrelatedTool of [
+    "postprocess",
+    "process-fixer",
+    "process_helper",
+    "process.output",
+    "mcp__process__logs",
+  ]) {
+    expect(runToolCall(repro, ["bash", unrelatedTool])).toBeUndefined();
+  }
+});
+
+test("allows chained visible delayed reads without imposing a sleep duration cap", () => {
+  for (const command of [
+    "sleep 45; test -f /tmp/handoff && stat /tmp/handoff && wc -c /tmp/handoff",
+    "sleep 2d\n[ -r '/tmp/agent handoff' ] && cat '/tmp/agent handoff'",
+  ]) {
+    expect(runToolCall(command)).toBeUndefined();
+  }
+});
+
+test("blocks delayed checks with dynamic sleeps, loops, retries, or backgrounding", () => {
+  for (const command of [
+    "sleep $DELAY; test -f /tmp/handoff && stat /tmp/handoff",
+    "sleep \"$DELAY\"; test -f /tmp/handoff && stat /tmp/handoff",
+    "sleep $(cat /tmp/delay); test -f /tmp/handoff && stat /tmp/handoff",
+    "while test ! -f /tmp/handoff; do sleep 30; done; stat /tmp/handoff",
+    "for delay in 30; do sleep $delay; stat /tmp/handoff; done",
+    "sleep 30; test -f /tmp/handoff || sleep 30; stat /tmp/handoff",
+    "sleep 30 & stat /tmp/handoff",
+  ]) {
+    expect(runToolCall(command)).toMatchObject({ block: true });
+  }
+});
+
+test("blocks mutations around a delayed read", () => {
+  for (const command of [
+    "touch /tmp/handoff; sleep 30; stat /tmp/handoff",
+    "sleep 30; touch /tmp/handoff; stat /tmp/handoff",
+    "sleep 30; stat /tmp/handoff; rm /tmp/handoff",
+  ]) {
+    expect(runToolCall(command)).toMatchObject({ block: true });
+  }
+});
+
+test("requires visible delayed-read output and rejects redirection or pipelines", () => {
+  for (const command of [
+    "sleep 30; test -f /tmp/handoff",
+    "sleep 30; test -f /tmp/handoff && stat /tmp/handoff >/dev/null",
+    "sleep 30; test -f /tmp/handoff && stat /tmp/handoff 2>&1",
+    "sleep 30; test -f /tmp/handoff && stat /tmp/handoff | head -1",
+  ]) {
+    expect(runToolCall(command)).toMatchObject({ block: true });
+  }
+});
 
 test("allows stdin-only rg filters while blocking broad rg path operands", () => {
   for (const command of [

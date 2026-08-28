@@ -615,14 +615,27 @@ function mergeTimeouts(existing: number | undefined, wrapperSeconds: number): nu
   return existingPositive === undefined ? wrapperSeconds : Math.min(existingPositive, wrapperSeconds);
 }
 
-function maxSleepSeconds(command: string): number | undefined {
-  let max: number | undefined;
-  for (const match of command.matchAll(/(?:^|[\s;&|])sleep\s+(\d+(?:\.\d+)?[smhd]?)(?=\s|[;&|]|$)/g)) {
-    const seconds = parseDurationSeconds(match[1]);
-    if (seconds === undefined) continue;
-    max = max === undefined ? seconds : Math.max(max, seconds);
-  }
-  return max;
+function isProcessToolName(name: string): boolean {
+  if (name === "process" || name === "process_start") return true;
+
+  const namespaceParts = name.split(/(?:__|[.:/])/);
+  const processIndex = namespaceParts.indexOf("process");
+  if (processIndex === -1) return false;
+
+  // A terminal `process` segment is the composite Pi process tool. A following
+  // `start` segment is a provider-flattened operation with equivalent capability.
+  return processIndex === namespaceParts.length - 1 || namespaceParts[processIndex + 1] === "start";
+}
+
+function hasActiveProcessTool(activeTools: string[]): boolean {
+  return activeTools.some(isProcessToolName);
+}
+
+function hasSleepCommand(command: string): boolean {
+  return shellCommandSegments(command).some((words) => {
+    const executable = words[commandExecutableIndex(words)]?.value.replace(/^.*\//, "");
+    return executable === "sleep";
+  });
 }
 
 function hasFindPruneOrCommonExcludes(command: string): boolean {
@@ -1287,6 +1300,115 @@ function isReadOnlyInspectionCommand(words: ShellWord[]): boolean {
   return false;
 }
 
+type DelayedCommand = {
+  words: ShellWord[];
+};
+
+function parseDelayedCommandChain(command: string): DelayedCommand[] | undefined {
+  const commands: DelayedCommand[] = [];
+  let words: ShellWord[] = [];
+  let index = 0;
+  let needsCommand = true;
+
+  const flush = () => {
+    if (words.length === 0) return false;
+    commands.push({ words });
+    words = [];
+    needsCommand = true;
+    return true;
+  };
+
+  while (index < command.length) {
+    const char = command[index]!;
+    if (char === "\n" || char === ";") {
+      if (!flush()) return undefined;
+      index++;
+      continue;
+    }
+    if (/\s/.test(char)) {
+      index++;
+      continue;
+    }
+    if (char === "&" && command[index + 1] === "&") {
+      if (!flush()) return undefined;
+      index += 2;
+      continue;
+    }
+    if ("(){}|&<>".includes(char)) return undefined;
+
+    const word = readShellWord(command, index);
+    if (!word) return undefined;
+    words.push(word);
+    needsCommand = false;
+    index = word.end;
+  }
+
+  if (words.length > 0) {
+    commands.push({ words });
+    needsCommand = false;
+  }
+  if (needsCommand || commands.length === 0) return undefined;
+  return commands;
+}
+
+function isStaticDelayedWord(word: ShellWord): boolean {
+  if (word.raw === "[" || word.raw === "]") return true;
+  return isStaticShellWord(word);
+}
+
+const HANDOFF_TEST_OPERATORS = new Set(["-e", "-f", "-h", "-L", "-r", "-s"]);
+const HANDOFF_OUTPUT_COMMANDS = new Set(["cat", "file", "head", "ls", "readlink", "stat", "tail", "wc"]);
+
+function isReadOnlyHandoffTest(words: ShellWord[], executableIndex: number): boolean {
+  const executable = words[executableIndex]!.value.replace(/^.*\//, "");
+  let args = words.slice(executableIndex + 1).map((word) => word.value);
+  if (executable === "[") {
+    if (args.at(-1) !== "]") return false;
+    args = args.slice(0, -1);
+  }
+  return args.length === 2 && HANDOFF_TEST_OPERATORS.has(args[0]!) && args[1]!.length > 0;
+}
+
+function isVisibleReadOnlyHandoffCheck(words: ShellWord[], executableIndex: number): boolean {
+  const executable = words[executableIndex]!.value.replace(/^.*\//, "");
+  if (!HANDOFF_OUTPUT_COMMANDS.has(executable)) return false;
+
+  const args = words.slice(executableIndex + 1).map((word) => word.value);
+  if (args.length === 0 || !args.some((arg) => arg !== "--" && !arg.startsWith("-"))) return false;
+  if (executable === "tail" && args.some((arg) => arg === "--follow" || arg.startsWith("--follow=") || /^-[^-]*[fF]/.test(arg))) {
+    return false;
+  }
+  return true;
+}
+
+function isBoundedOneShotDelayedRead(command: string): boolean {
+  const commands = parseDelayedCommandChain(command);
+  if (!commands || commands.length < 2) return false;
+  if (!commands.every(({ words }) => words.every(isStaticDelayedWord))) return false;
+
+  const sleepWords = commands[0]!.words;
+  const sleepIndex = commandExecutableIndex(sleepWords);
+  const sleepExecutable = sleepWords[sleepIndex]?.value.replace(/^.*\//, "");
+  const sleepArgs = sleepWords.slice(sleepIndex + 1);
+  if (sleepExecutable !== "sleep" || sleepArgs.length !== 1 || parseDurationSeconds(sleepArgs[0]!.value) === undefined) {
+    return false;
+  }
+
+  let hasVisibleOutput = false;
+  for (const { words } of commands.slice(1)) {
+    const executableIndex = commandExecutableIndex(words);
+    const executable = words[executableIndex]?.value.replace(/^.*\//, "");
+    if (executable === "test" || executable === "[") {
+      if (!isReadOnlyHandoffTest(words, executableIndex)) return false;
+      continue;
+    }
+    if (!isVisibleReadOnlyHandoffCheck(words, executableIndex)) return false;
+    hasVisibleOutput = true;
+  }
+
+  return hasVisibleOutput;
+}
+
 function safeInspectionPrefix(command: string): string | undefined {
   const segments = shellCommandSegments(command);
   const unsafe = segments.find((words) => {
@@ -1418,7 +1540,7 @@ function packageManagerFailureNote(command: string, output: string): string | un
   return undefined;
 }
 
-function getIneffectiveCommandNudge(command: string, cwd: string): string | undefined {
+function getIneffectiveCommandNudge(command: string, cwd: string, processToolActive: boolean): string | undefined {
   if (looksLikeExtensionHarnessCommand(command)) return undefined;
 
   const packageNudge = packageManagerNudge(command, cwd);
@@ -1486,7 +1608,9 @@ function getIneffectiveCommandNudge(command: string, cwd: string): string | unde
   if (hasLongRunningWatcher(command)) {
     return [
       "Blocked long-running watcher/dev-server command in bash.",
-      "Use the `process` tool instead: `process.start` with a clear name, then `process.output`/`process.logs`/`process.kill` as needed.",
+      processToolActive
+        ? "Use the active `process` tool instead: `process.start` with a clear name, then `process.output`/`process.logs`/`process.kill` as needed."
+        : "No process tool is active, so bash-fixer cannot route this long-lived command to background process management.",
       "For logs, prefer `logWatches` over `wrangler tail` blocking the main turn.",
     ].join(" ");
   }
@@ -1494,8 +1618,12 @@ function getIneffectiveCommandNudge(command: string, cwd: string): string | unde
   if (hasCurlPollingLoop(command)) {
     return [
       "Blocked curl+sleep polling loop in the bash tool.",
-      "Use `process.start` for polling/waiting workflows so the main agent turn stays free, or run a single immediate status check now.",
-      "If this is an external async job, write progress to a log file and watch it with the `process` tool instead of blocking bash.",
+      processToolActive
+        ? "Use `process.start` for polling/waiting workflows so the main agent turn stays free, or run a single immediate status check now."
+        : "No process tool is active; run one immediate status check instead of a polling loop.",
+      processToolActive
+        ? "If this is an external async job, write progress to a log file and watch it with the `process` tool instead of blocking bash."
+        : "If this is an external async job, let its completion notification or handoff artifact bring you back.",
       "For JS-heavy or logged-in browser/web work, prefer the Playwriter skill/CLI/browser extension from our browser-harness evaluation; it can use real browser state, inspect DOM/network, take screenshots, and make deeper network observations. For simple current-info lookup, prefer Pi web/search/fetch tools when active.",
     ].join(" ");
   }
@@ -1512,24 +1640,33 @@ function getIneffectiveCommandNudge(command: string, cwd: string): string | unde
     return [
       "Blocked unsafe output piped directly to `tail`/`head`; only a statically parsed, bounded `frog list` inspection is allowed for Frog commands.",
       "For validation/build output, use an inspectable pattern that preserves exit code: `log=$(mktemp); <command> >\"$log\" 2>&1; status=$?; tail -80 \"$log\"; echo \"Full output: $log\"; exit $status`.",
-      "For long validations, consider `process.start` and inspect logs instead of blocking the main turn.",
+      processToolActive
+        ? "For long validations, consider `process.start` and inspect logs instead of blocking the main turn."
+        : "No process tool is active; keep validation in the foreground and preserve its exit status and full output.",
     ].join(" ");
   }
 
   if (hasManualBackgroundProcess(command)) {
     return [
       "Blocked manual bash background/PID orchestration.",
-      "Use the `process` tool for background commands instead of `cmd & PID=$!; sleep ...; kill $PID` in the bash tool.",
-      "Start the long-lived command with `process.start`, then inspect output or logs from the main session.",
+      processToolActive
+        ? "Use the active `process` tool for background commands instead of `cmd & PID=$!; sleep ...; kill $PID` in the bash tool."
+        : "No process tool is active, so do not emulate process management with shell backgrounding and PID files.",
+      processToolActive
+        ? "Start the long-lived command with `process.start`, then inspect output or logs from the main session."
+        : "Run only a bounded foreground command or a one-shot delayed read-only handoff check.",
     ].join(" ");
   }
 
-  const sleepSeconds = maxSleepSeconds(command);
-  if (sleepSeconds !== undefined && sleepSeconds >= 30) {
+  if (hasSleepCommand(command)) {
+    if (!processToolActive && isBoundedOneShotDelayedRead(command)) return undefined;
+
     return [
-      `Blocked long blocking sleep (${sleepSeconds}s) in the bash tool.`,
-      "If this is a delayed check or polling loop, use `process.start` for the wait/check command so the main agent turn is not blocked.",
-      "If you only need current state, run the check now without sleeping.",
+      "Blocked sleep/wait command in the bash tool.",
+      processToolActive
+        ? "Use `process.start` for the wait/check command so the main agent turn is not blocked."
+        : "No process tool is active; bash allows only one static `sleep` followed by statically parsed read-only handoff checks with visible output.",
+      "Loops, retries, backgrounding, mutations, dynamic expansion, redirection, pipelines, and output-free checks are not allowed.",
     ].join(" ");
   }
 
@@ -1639,7 +1776,8 @@ export default function bashFixer(pi: ExtensionAPI) {
     // ─── Fix 1: block/nudge inefficient orchestration/search patterns ──
     // This is intentionally a nudge, not a timeout: make the agent choose the
     // Pi-native tool (`finder`/`process`) instead of burning a blocking bash turn.
-    const nudge = getIneffectiveCommandNudge(command, ctx.cwd);
+    const processToolActive = hasActiveProcessTool(pi.getActiveTools());
+    const nudge = getIneffectiveCommandNudge(command, ctx.cwd, processToolActive);
     if (nudge) {
       fixCount.nudges++;
       writeBashFixerTelemetry(ctx, "block", "nudge", command, { reason: nudge.slice(0, 240) });
