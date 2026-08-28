@@ -91,6 +91,8 @@ Commands/tool:
 - `memory_context` — Bobby's bounded native context projection
 - `memory_propose` — pending create/deprecate proposal only
 
+For local source changes, run `pnpm run deploy:memory`, then `/reload` in every already-running Pi parent; a new Pi process loads the deployed extension at startup. Tool calls already running during `/reload` continue in the old extension frame, so invoke `memory_propose` only after that call returns.
+
 ### `codex-ui-gallery`
 High-quality native Pi TUI image gallery for `codex-ui-design` outputs:
 - opens generated `summary.json`, output directories, or image paths
