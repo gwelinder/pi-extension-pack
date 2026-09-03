@@ -1,5 +1,5 @@
 import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { homedir, tmpdir } from "node:os";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
 import {
@@ -116,11 +116,8 @@ describe("proposals and extraction validation", () => {
       body: "Run focused validation after non-trivial changes.",
     });
     expect(proposal).toMatchObject({ proposalType: "create", provenance: { source: "pi-explicit" }, record: { scope: "project" } });
-    const config = getBobbyConfig({ BOBBY_CANONICAL_MEMORY_ROOT: "/tmp/canonical" } as NodeJS.ProcessEnv);
-    expect(buildBobbyInvocation(config, "propose")).toEqual({
-      file: join(homedir(), ".local", "bin", "bobby"),
-      args: ["ops", "canonical-memory-client", "--root", "/tmp/canonical"],
-    });
+    const config = getBobbyConfig({ BOBBY_BIN: "bobby-test", BOBBY_CANONICAL_MEMORY_ROOT: "/tmp/canonical" } as NodeJS.ProcessEnv);
+    expect(buildBobbyInvocation(config, "propose")).toEqual({ file: "bobby-test", args: ["ops", "canonical-memory-client", "--root", "/tmp/canonical"] });
     expect(buildInferredProposal({
       name: "inferred-validation",
       description: "Candidate from a durable session signal",
