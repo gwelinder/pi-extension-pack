@@ -237,9 +237,22 @@ export default function skillGateway(pi: ExtensionAPI) {
     const beforeChars = event.systemPrompt.length;
     let nextPrompt = event.systemPrompt;
     let strippedChars = 0;
-    if (currentPolicy.mode === "routed" && skillSection && nextPrompt.includes(skillSection)) {
-      nextPrompt = nextPrompt.replace(skillSection, "");
-      strippedChars = skillSection.length;
+    const trimmedSkillSection = skillSection.trim();
+    // Pi trims the formatter inside its structured wrapper. Require one exact
+    // catalog occurrence, including across wrapped and unwrapped forms.
+    if (currentPolicy.mode === "routed" && trimmedSkillSection
+      && nextPrompt.indexOf(trimmedSkillSection) === nextPrompt.lastIndexOf(trimmedSkillSection)
+      && nextPrompt.indexOf("<available_skills>") === nextPrompt.lastIndexOf("<available_skills>")
+      && nextPrompt.indexOf("<skills>") === nextPrompt.lastIndexOf("<skills>")) {
+      const wrappedSkillSection = `<skills>\n${trimmedSkillSection}\n</skills>`;
+      const matchedSection = nextPrompt.includes("<skills>") ? wrappedSkillSection : skillSection;
+      const start = nextPrompt.indexOf(matchedSection);
+      const end = start + matchedSection.length;
+      if (start >= 0 && (start === 0 || nextPrompt[start - 1] === "\n" || matchedSection === skillSection)
+        && (end === nextPrompt.length || nextPrompt[end] === "\n")) {
+        nextPrompt = nextPrompt.slice(0, start) + nextPrompt.slice(end);
+        strippedChars = matchedSection.length;
+      }
     }
 
     let recommendation = "";
