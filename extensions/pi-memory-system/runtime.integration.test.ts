@@ -1,84 +1,38 @@
-import { chmodSync, cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { DefaultResourceLoader, SettingsManager } from "@earendil-works/pi-coding-agent";
+import { chmodSync, cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
-import { spawn } from "node:child_process";
+import { join } from "node:path";
 import { expect, test } from "bun:test";
 
-type RpcEvent = Record<string, unknown>;
-
-async function runMemoryCommand(
-  extension: string,
-  env: NodeJS.ProcessEnv,
-  beforePrompt?: () => void,
-): Promise<{ commands: Array<{ name: string }>; notice: string }> {
-  return await new Promise((resolvePromise, reject) => {
-    const child = spawn("pi", ["--mode", "rpc", "--no-session", "--no-extensions", "-e", join(extension, "index.ts")], {
-      cwd: resolve(import.meta.dir, "../.."),
-      env,
-      stdio: ["pipe", "pipe", "pipe"],
-    });
-    let buffer = "";
-    let stderr = "";
-    let requestId = 0;
-    let commands: Array<{ name: string }> = [];
-    let settled = false;
-    const fail = (error: Error) => {
-      if (settled) return;
-      settled = true;
-      child.kill("SIGTERM");
-      reject(error);
-    };
-    const send = (message: Record<string, unknown>) => {
-      child.stdin.write(`${JSON.stringify({ id: `probe-${++requestId}`, ...message })}\n`);
-    };
-
-    child.stderr.on("data", (chunk) => { stderr += String(chunk); });
-    child.on("error", fail);
-    child.on("exit", (code) => {
-      if (!settled) fail(new Error(`Pi exited ${code}: ${stderr}`));
-    });
-    child.stdout.on("data", (chunk) => {
-      buffer += String(chunk);
-      while (true) {
-        const newline = buffer.indexOf("\n");
-        if (newline < 0) return;
-        const line = buffer.slice(0, newline);
-        buffer = buffer.slice(newline + 1);
-        if (!line) continue;
-        let event: RpcEvent;
-        try { event = JSON.parse(line) as RpcEvent; } catch { continue; }
-        if (event.type === "response" && event.command === "get_commands" && event.success === true) {
-          const data = event.data as { commands?: Array<{ name: string }> };
-          commands = data.commands || [];
-          if (!commands.some((command) => command.name === "remember")) {
-            fail(new Error("Fresh Pi did not register /remember."));
-            return;
-          }
-          beforePrompt?.();
-          send({ type: "prompt", message: "/remember feedback user :: Owner requires one Bobby canonical-memory command stream without legacy aliases or compatibility fallbacks." });
-        }
-        if (event.type === "extension_ui_request" && event.method === "notify" && typeof event.message === "string") {
-          if (settled) return;
-          settled = true;
-          child.kill("SIGTERM");
-          resolvePromise({ commands, notice: event.message });
-          return;
-        }
-      }
-    });
-    send({ type: "get_commands" });
-  });
+function findMemoryPropose(loader: DefaultResourceLoader) {
+  const errors = loader.getExtensions().errors;
+  expect(errors).toEqual([]);
+  for (const extension of loader.getExtensions().extensions) {
+    const tool = extension.tools.get("memory_propose");
+    if (tool) return tool;
+  }
+  throw new Error("Reloaded Pi did not register the memory_propose tool.");
 }
 
-test("a running Pi holds its old memory client until a fresh registration", async () => {
-  const dir = mkdtempSync(join(tmpdir(), "pi-memory-runtime-"));
+test("the model-callable memory_propose tool picks up a fresh client across one real reload", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "pi-memory-reload-"));
   const extension = join(dir, "pi-memory-system");
+  const projectDir = join(dir, "project");
+  const agentDir = join(dir, "agent");
   const clientPath = join(extension, "bobby-client.ts");
   const requestPath = join(dir, "request.json");
+  const argvPath = join(dir, "argv.log");
   const bobbyPath = join(dir, "bobby");
+  const oldBin = process.env.BOBBY_BIN;
+  const oldRoot = process.env.BOBBY_CANONICAL_MEMORY_ROOT;
   try {
     cpSync(import.meta.dir, extension, { recursive: true, filter: (path) => !path.endsWith(".test.ts") });
+    mkdirSync(projectDir, { recursive: true });
+    mkdirSync(agentDir, { recursive: true });
+    writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ packages: [] }));
     const freshClient = readFileSync(clientPath, "utf8");
+    expect(freshClient).toContain('command: "ops", args: ["canonical-memory-client"]');
+    expect(freshClient).not.toMatch(/command:\s*"canonical-memory-client"/);
     const staleClient = freshClient.replaceAll(
       'command: "ops", args: ["canonical-memory-client"]',
       'command: "canonical-memory-client"',
@@ -86,6 +40,7 @@ test("a running Pi holds its old memory client until a fresh registration", asyn
     expect(staleClient).not.toBe(freshClient);
     writeFileSync(clientPath, staleClient);
     writeFileSync(bobbyPath, `#!/bin/sh
+printf '%s\\n' "$*" > "${argvPath}"
 cat > "${requestPath}"
 if [ "$1" = "ops" ] && [ "$2" = "canonical-memory-client" ]; then
   printf '%s\\n' '{"ok":true,"data":{"proposalId":"fresh-pending-123"}}'
@@ -94,18 +49,50 @@ else
 fi
 `);
     chmodSync(bobbyPath, 0o755);
-    const env = {
-      ...process.env,
-      BOBBY_BIN: bobbyPath,
-      BOBBY_CANONICAL_MEMORY_ROOT: join(dir, "canonical"),
-    };
+    process.env.BOBBY_BIN = bobbyPath;
+    process.env.BOBBY_CANONICAL_MEMORY_ROOT = join(dir, "canonical");
 
-    const stale = await runMemoryCommand(extension, env, () => writeFileSync(clientPath, freshClient));
-    expect(stale.commands.map((command) => command.name)).toContain("remember");
-    expect(stale.notice).toContain("Bobby unavailable; no canonical mutation was made (expected bobby ops canonical-memory-client).");
+    const settings = SettingsManager.create(projectDir, agentDir, { projectTrusted: true });
+    const loader = new DefaultResourceLoader({
+      cwd: projectDir,
+      agentDir,
+      settingsManager: settings,
+      additionalExtensionPaths: [join(extension, "index.ts")],
+    });
+    await loader.reload();
 
-    const fresh = await runMemoryCommand(extension, env);
-    expect(fresh.notice).toBe("Canonical proposal fresh-pending-123 is pending Bobby review.");
+    const ctx = {
+      cwd: projectDir,
+      sessionManager: { getSessionId: () => "reload-proof" },
+      hasUI: false,
+    } as never;
+    const params = {
+      content: "Owner requires one Bobby canonical-memory command stream without legacy aliases.",
+      type: "feedback",
+      scope: "project",
+    } as never;
+
+    const staleTool = findMemoryPropose(loader);
+    const staleResult = await staleTool.definition.execute("stale-call", params, undefined, undefined, ctx);
+    expect(staleResult.content[0]?.text).toContain(
+      "Bobby unavailable; no canonical mutation was made (expected bobby ops canonical-memory-client).",
+    );
+    expect((staleResult.details as { pending?: boolean } | undefined)?.pending).toBe(false);
+
+    // Simulate a deploy arriving mid-session, then take the same /reload path a
+    // running Pi parent uses (session.reload -> resource loader reload).
+    writeFileSync(clientPath, freshClient);
+    await loader.reload();
+
+    const freshTool = findMemoryPropose(loader);
+    expect(freshTool.definition).not.toBe(staleTool.definition);
+    const freshResult = await freshTool.definition.execute("fresh-call", params, undefined, undefined, ctx);
+    expect(freshResult.content[0]?.text).toBe("Canonical proposal fresh-pending-123 is pending Bobby review.");
+    expect((freshResult.details as { pending?: boolean } | undefined)?.pending).toBe(true);
+    expect(readFileSync(argvPath, "utf8").trim().split(/\s+/).slice(0, 2)).toEqual([
+      "ops",
+      "canonical-memory-client",
+    ]);
     expect(JSON.parse(readFileSync(requestPath, "utf8"))).toMatchObject({
       operation: "propose",
       payload: {
@@ -117,6 +104,10 @@ fi
       },
     });
   } finally {
+    if (oldBin === undefined) delete process.env.BOBBY_BIN;
+    else process.env.BOBBY_BIN = oldBin;
+    if (oldRoot === undefined) delete process.env.BOBBY_CANONICAL_MEMORY_ROOT;
+    else process.env.BOBBY_CANONICAL_MEMORY_ROOT = oldRoot;
     rmSync(dir, { recursive: true, force: true });
   }
-});
+}, 60_000);
