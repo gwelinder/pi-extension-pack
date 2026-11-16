@@ -23,6 +23,7 @@ import {
   resolve as resolvePath,
   sep as pathSep,
 } from "node:path";
+import { geminiUrlPrompt, readGeminiUrlResponse, type GeminiUrlResponse } from "./gemini-url.ts";
 
 const CONFIG_PATH = join(homedir(), ".pi", "web-search.json");
 const RESULT_DIR = join(homedir(), ".pi", "agent", "rich-fetch-results");
@@ -55,6 +56,8 @@ type RichResult = {
   error?: string | null;
   artifactPaths?: string[];
   images?: Array<{ data: string; mimeType: string; label: string; path?: string }>;
+  // True when a model wrote `content` from the page (Gemini URL context), so it is not verbatim page text.
+  modelWritten?: boolean;
 };
 
 type GitHubUrlInfo = {
@@ -604,10 +607,7 @@ async function fetchBasicUrl(url: string, params: RichFetchParams): Promise<Rich
 async function fetchGeminiUrl(url: string, params: RichFetchParams): Promise<RichResult> {
   const key = geminiApiKey();
   if (!key) return { url, title: url, content: "", error: "Missing GEMINI_API_KEY or geminiApiKey in ~/.pi/web-search.json" };
-  const prompt = params.prompt?.trim()
-    ? `${params.prompt.trim()}\n\nUse this URL as the grounded source. Return markdown with citations/URLs when useful.\n\nURL: ${url}`
-    : `Extract the complete readable content from this URL as clean markdown. Include title, main text, code blocks, and tables. Do not summarize.\n\nURL: ${url}`;
-  const body = { contents: [{ parts: [{ text: prompt }] }], tools: [{ url_context: {} }] };
+  const body = { contents: [{ parts: [{ text: geminiUrlPrompt(url, params.prompt) }] }], tools: [{ url_context: {} }] };
   const model = preferredModel(params);
   const res = await fetch(`${GEMINI_API_BASE}/models/${model}:generateContent?key=${key}`, {
     method: "POST",
@@ -616,17 +616,16 @@ async function fetchGeminiUrl(url: string, params: RichFetchParams): Promise<Ric
     signal: AbortSignal.timeout(90000),
   });
   if (!res.ok) return { url, title: url, content: "", error: `Gemini URL context ${res.status}: ${(await res.text()).slice(0, 300)}` };
-  const data = await res.json() as {
-    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> }; url_context_metadata?: { url_metadata?: Array<{ url_retrieval_status?: string }> } }>;
+  const outcome = readGeminiUrlResponse(await res.json() as GeminiUrlResponse);
+  if (outcome.error !== undefined) return { url, title: url, content: "", error: outcome.error };
+  const path = saveArtifact("gemini-url", ".md", outcome.text);
+  return {
+    url,
+    title: titleFromMarkdown(outcome.text, new URL(url).hostname),
+    content: truncate(outcome.text, maxChars(params)),
+    artifactPaths: [path],
+    modelWritten: true,
   };
-  const status = data.candidates?.[0]?.url_context_metadata?.url_metadata?.[0]?.url_retrieval_status;
-  if (status === "URL_RETRIEVAL_STATUS_UNSAFE" || status === "URL_RETRIEVAL_STATUS_ERROR") {
-    return { url, title: url, content: "", error: `Gemini URL retrieval failed: ${status}` };
-  }
-  const text = data.candidates?.[0]?.content?.parts?.map((part) => part.text).filter(Boolean).join("\n") ?? "";
-  if (!text.trim()) return { url, title: url, content: "", error: "Gemini URL context returned empty content" };
-  const path = saveArtifact("gemini-url", ".md", text);
-  return { url, title: titleFromMarkdown(text, new URL(url).hostname), content: truncate(text, maxChars(params)), artifactPaths: [path] };
 }
 
 async function fetchUrl(url: string, params: RichFetchParams): Promise<RichResult> {
@@ -908,6 +907,7 @@ function renderCombined(results: RichResult[], limit: number): string {
     parts.push(result.url);
     if (result.artifactPaths?.length) parts.push(`Artifacts: ${result.artifactPaths.join(", ")}`);
     if (result.error) parts.push(`Error: ${result.error}`);
+    if (result.modelWritten) parts.push("Model-written: Gemini read this page and wrote the text below. It is not verbatim page text; check quotations against the URL.");
     if (result.content) parts.push(truncate(result.content, limit));
     parts.push("");
   }
@@ -973,6 +973,7 @@ export default function richFetchExtension(pi: ExtensionAPI) {
           outputPath: combinedPath,
           count: results.length,
           errors: results.filter((result) => result.error).map((result) => ({ url: result.url, error: result.error })),
+          modelWrittenUrls: results.filter((result) => result.modelWritten).map((result) => result.url),
           artifactPaths: results.flatMap((result) => result.artifactPaths ?? []),
           imageCount: results.reduce((sum, result) => sum + (result.images?.length ?? 0), 0),
         },
