@@ -9,14 +9,12 @@ const CORE_TOOLS = [
   "write",
   "skill_lookup",
   "tool_lookup",
-  "finder",
   "ask_user_question",
 ];
 
 const SEARCH_TOOLS = [
   ...CORE_TOOLS,
   "exa",
-  "librarian",
   "rich_fetch",
 ];
 
@@ -62,14 +60,24 @@ const PROFILES = {
   browser: BROWSER_EVAL_TOOLS,
 } as const;
 
-// Project-local first-class tools should ride along with every profile when
-// available, without causing "missing tool" noise outside those projects.
-const AUTO_INCLUDED_TOOLS = ["codegraph", "memory"];
+// Project-local first-class tools and MCP/memory bridge tools should ride along
+// with every profile when available, without causing "missing tool" noise.
+const AUTO_INCLUDED_TOOLS = [
+  "memory",
+  "memory_query",
+  "memory_context",
+  "memory_propose",
+  "tool_search",
+  "codemode",
+  "list_mcp_resources",
+  "list_mcp_resource_templates",
+  "read_mcp_resource",
+];
 
 const LOADABLE_PROFILES = ["search", "orch", "design", "cloudflare", "browser"] as const;
 
 const PROFILE_SEARCH_TERMS: Record<(typeof LOADABLE_PROFILES)[number], string> = {
-  search: "search research web sources citations recent url pdf transcript github librarian exa fetch",
+  search: "search research web sources citations recent url pdf transcript github exa fetch",
   orch: "worker subagent dispatch process background long-running tmux session codex claude orchestration",
   design: "design frontend ui ux visual mockup prototype gallery deck image",
   cloudflare: "cloudflare workers wrangler durable objects d1 r2 dns zone kv",
@@ -125,7 +133,8 @@ function requestedToolsForProfile(profile: ProfileName, available: Set<string>):
 
 function setTools(pi: ExtensionAPI, profile: ProfileName): { active: string[]; missing: string[] } {
   const available = new Set(pi.getAllTools().map((tool) => tool.name));
-  const requested = requestedToolsForProfile(profile, available);
+  const activeMcp = pi.getActiveTools().filter((name) => name.startsWith("mcp__") && available.has(name));
+  const requested = unique([...requestedToolsForProfile(profile, available), ...activeMcp]);
   const active = requested.filter((name) => available.has(name));
   const missing = requested.filter((name) => !available.has(name));
   pi.setActiveTools(active);
@@ -175,14 +184,14 @@ function findToolsToLoad(pi: ExtensionAPI, query: string, limit: number): { grou
     .map((name) => ({ name, score: scoreText(tokens, `${name} ${PROFILE_SEARCH_TERMS[name]}`) }))
     .sort((a, b) => b.score - a.score)[0];
 
-  if (group && group.score > 0) {
-    const tools = requestedToolsForProfile(group.name, available)
-      .filter((name) => !CORE_TOOLS.includes(name) && !active.has(name))
-      .slice(0, limit);
-    if (tools.length > 0) return { group: group.name, tools };
-  }
+  const groupTools =
+    group && group.score > 0
+      ? requestedToolsForProfile(group.name, available).filter(
+          (name) => available.has(name) && !CORE_TOOLS.includes(name) && !active.has(name),
+        )
+      : [];
 
-  const tools = allTools
+  const matchedTools = allTools
     .filter((tool) => !active.has(tool.name) && tool.name !== "tool_lookup")
     .map((tool) => ({
       name: tool.name,
@@ -190,10 +199,13 @@ function findToolsToLoad(pi: ExtensionAPI, query: string, limit: number): { grou
     }))
     .filter((candidate) => candidate.score > 0)
     .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name))
-    .slice(0, limit)
     .map((candidate) => candidate.name);
 
-  return { tools };
+  const combined = unique([...groupTools, ...matchedTools]).slice(0, limit);
+  return {
+    group: groupTools.length > 0 && group ? group.name : undefined,
+    tools: combined,
+  };
 }
 
 function insertPrefix(ctx: ExtensionContext, prefix: string): void {
