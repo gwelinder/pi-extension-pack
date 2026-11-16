@@ -62,7 +62,7 @@ Compact content extractor for cases where search is not enough:
 - GitHub repo/file extraction via clone/API fallback
 - PDF text extraction via `pdftotext`
 - YouTube and local-video analysis via Gemini, with optional frame extraction via `yt-dlp`/`ffmpeg`
-- Gemini URL-context fallback for JS-rendered/blocked pages
+- Gemini URL-context fallback for JS-rendered/blocked pages, used only when Gemini reports that it retrieved the page; its text is marked model-written (`modelWrittenUrls` in details), and a page Gemini could not open is an error
 - stores full artifacts under `~/.pi/agent/rich-fetch-results/`
 
 ### `codegraph`
