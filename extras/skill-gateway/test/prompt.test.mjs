@@ -43,7 +43,7 @@ async function route(mode, input, nativeSkills = skills) {
   const errors = [];
   runner.onError((error) => errors.push(error));
   // Empty user input suppresses recommendations through the production internal-prompt check.
-  const result = await runner.emitBeforeAgentStart("", undefined, { ...options, skills: nativeSkills, ...(input === undefined ? {} : { forceSystemPrompt: input }) });
+  const result = await runner.emitBeforeAgentStart({ messageType: "user", prompt: "" }, { ...options, skills: nativeSkills, ...(input === undefined ? {} : { forceSystemPrompt: input }) });
   assert.deepEqual(errors, []);
   assert.deepEqual(result.systemPromptOptions.skills, nativeSkills);
   assert.deepEqual(result.systemPromptOptions.selectedTools, options.selectedTools);
